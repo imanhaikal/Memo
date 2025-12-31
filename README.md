@@ -7,9 +7,10 @@ The app features a "Premium Hardware" / "Clean Tech" design aesthetic, focusing 
 ## 🚀 Features
 
 *   **Dynamic Budget Engine**: Automatically recalculates daily allowances based on current spending and remaining days.
-*   **Flexible Budget Cycles**: Support for specific date ranges or countdown modes.
-*   **Real-time Status**: Visual indicators for "On Track", "Careful", and "Over Limit" states.
-*   **Transaction Management**: Quick and easy expense entry.
+*   **Fluid Logic**: Spending less today automatically increases tomorrow's limit.
+*   **Real-time Status**: Visual indicators for "On Track" (Green), "Careful" (Gray), and "Over Limit" (Red) states.
+*   **Persistent Storage**: Transactions are saved using **Room Database**, and budget settings persist via **DataStore**.
+*   **Premium Motion**: Physics-based rolling numbers, staggered entrance animations, and smooth transitions.
 *   **Privacy Focused**: All data is stored locally on the device.
 
 ## 🛠 Tech Stack
@@ -17,16 +18,21 @@ The app features a "Premium Hardware" / "Clean Tech" design aesthetic, focusing 
 *   **Language**: Kotlin
 *   **UI Framework**: Jetpack Compose (Material3)
 *   **Architecture**: MVVM (Model-View-ViewModel)
-*   **Persistence**: Room Database (Transactions) & Jetpack DataStore (Budget Settings)
+*   **Persistence**:
+    *   Room Database (Transactions)
+    *   Jetpack DataStore (Budget Settings)
 *   **Build System**: Gradle (Kotlin DSL)
+*   **Testing**: JUnit, Mockk, Turbine (Unit Tests)
 
 ## 🏗 Architecture
 
 The application follows the recommended Android Architecture guidelines:
 
-*   **UI Layer**: Jetpack Compose for declarative UI.
-*   **ViewModel Layer**: Manages UI state and business logic (Budget Calculation Engine).
-*   **Data Layer**: Repositories mediating data between Room/DataStore and the UI.
+*   **UI Layer**: `ui/screens` and `ui/components` using Jetpack Compose.
+*   **ViewModel Layer**: `MainViewModel` manages UI state (`BudgetUiState`) and executes the core budgeting algorithm.
+*   **Data Layer**:
+    *   `TransactionDao`: Interface for Room Database operations.
+    *   `BudgetPreferences`: Wrapper for DataStore operations.
 
 ## 💻 Setup & Installation
 
@@ -34,7 +40,7 @@ To build and run this project locally:
 
 1.  **Prerequisites**:
     *   Android Studio Ladybug or newer.
-    *   JDK 11 or newer.
+    *   JDK 17 (Required by AGP 8.13+).
 
 2.  **Clone the Repository**:
     ```bash
@@ -45,10 +51,14 @@ To build and run this project locally:
 3.  **Open in Android Studio**:
     *   Open Android Studio and select "Open".
     *   Navigate to the cloned directory and select it.
+    *   Ensure Gradle Sync completes successfully.
 
-4.  **Build and Run**:
-    *   Wait for Gradle synchronization to complete.
-    *   Select a connected device or emulator (API Level 26+).
+4.  **Run Tests**:
+    *   Run Unit Tests: `./gradlew testDebugUnitTest`
+    *   Run UI/DB Tests: `./gradlew connectedAndroidTest` (Requires connected device/emulator).
+
+5.  **Build and Run**:
+    *   Select a connected device or emulator (API Level 26+ recommended).
     *   Click the **Run** button (Green Play Icon).
 
 ## 📂 Project Structure
@@ -57,10 +67,11 @@ To build and run this project locally:
 c:/AndroidProjects/Memo
 ├── app/
 │   ├── src/main/java/com/imanhaikal/memo/
-│   │   ├── ui/             # Composable screens and theme
-│   │   ├── MainActivity.kt # Entry point
-│   │   └── ...
-│   └── src/main/res/       # Static resources
+│   │   ├── data/           # Room Entity, DAO, Database, Preferences
+│   │   ├── ui/             # Composable screens, components, viewmodels
+│   │   ├── ui/theme/       # Color, Type, Theme definitions
+│   │   └── MemoApplication.kt # Manual DI Container
+│   └── src/test/           # Unit tests (MainViewModelTest)
 ├── gradle/                 # Gradle configuration and version catalog
 ├── REQUIREMENTS.md         # Detailed functional requirements
 ├── DESIGN.md               # UI/UX design specifications

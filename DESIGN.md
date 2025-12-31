@@ -177,3 +177,71 @@ Modifier
     )
     .padding(32.dp)
 ```
+
+---
+
+## 7. Implementation Specification (Prototype Mapping)
+
+### 7.1 CSS to Compose Mapping
+
+**Colors:**
+| CSS Variable | Compose Color | Hex | Role |
+| :--- | :--- | :--- | :--- |
+| `--bg-color` | `AppColors.Background` | `0xFFF9F9F9` | Main screen background |
+| `--surface-color` | `AppColors.Surface` | `0xFFFFFFFF` | Card backgrounds |
+| `--text-primary` | `AppColors.TextPrimary` | `0xFF111111` | Primary text |
+| `--text-secondary` | `AppColors.TextSecondary` | `0xFF888888` | Labels |
+| `--text-tertiary` | `AppColors.TextTertiary` | `0xFFC0C0C0` | Dates/Meta |
+| `--accent-color` | `AppColors.Yellow` | `0xFFF2E057` | Primary buttons, active states |
+| `--danger-color` | `AppColors.Red` | `0xFFFF4444` | Over limit text |
+| `--border-color` | `AppColors.Border` | `0xFFF0F0F0` | Subtle card borders |
+
+**Shapes:**
+| CSS Variable | Compose Shape | Size | Usage |
+| :--- | :--- | :--- | :--- |
+| `--radius-xl` (32px) | `AppShapes.Large` | `32.dp` | Main Hero Card, Modal |
+| `--radius-lg` (24px) | `AppShapes.Medium` | `24.dp` | Stat Cards |
+| `--radius-md` (16px) | `AppShapes.Small` | `16.dp` | Transaction Items, Inputs |
+| `99px` (Pill) | `CircleShape` | `50` | FAB, Buttons, Status Pill |
+
+**Animations:**
+| CSS Transition | Compose Equivalent | Spec |
+| :--- | :--- | :--- |
+| `--ease-spring` (Bouncy) | `spring()` | `dampingRatio = 0.6f`, `stiffness = Low` |
+| `--ease-out` (Smooth) | `tween()` | `durationMillis = 400`, `easing = FastOutSlowIn` |
+| `itemSlideIn` (Y + Fade) | `AnimatedVisibility` | `slideInVertically { it / 2 } + fadeIn` |
+| Rolling Numbers | `Animatable` | Custom `RollingNumberText` composable |
+
+### 7.2 Architecture Components
+
+**Data Layer:**
+*   **Transactions:** `Room` Database.
+    *   Entity: `Transaction(id, amount, note, dateString)`
+    *   *Note:* Prototype uses ISO strings. We will use `java.time.Instant` or `LocalDateTime` stored as `Long` (Epoch) or `String`.
+*   **Budget State:** `DataStore` (Preferences).
+    *   Keys: `TOTAL_BUDGET` (Double), `CYCLE_START_DATE` (String/Long), `TOTAL_DAYS` (Int).
+
+**UI Structure (Composable Tree):**
+*   `MemoApp` (Theme Wrapper)
+    *   `NavHost`
+        *   `SetupScreen` (Form)
+        *   `DashboardScreen` (Scaffold)
+            *   `TopBar` (Brand + Reset)
+            *   `HeroCard` (Available Today + StatusPill)
+            *   `StatsGrid` (Row of `StatCard`)
+            *   `TransactionHistory` (LazyColumn of `TransactionItem`)
+            *   `AddExpenseFab` (Box/Positioned)
+        *   `AddTransactionSheet` (ModalBottomSheet)
+
+### 7.3 Logic Replication (`calculate()`)
+
+The Kotlin `ViewModel` must replicate the JS `calculate()` function exactly:
+
+1.  **Days Passed:** `(CurrentDate - StartDate)`.
+2.  **Days Remaining:** `max(1, TotalDays - DaysPassed)`.
+3.  **Spent Before Today:** Sum of transactions where `date < Today`.
+4.  **Pool Start of Day:** `TotalBudget - SpentBeforeToday`.
+5.  **Baseline Daily Limit:** `PoolStartOfDay / DaysRemaining`.
+6.  **Available Today:** `BaselineDailyLimit - SpentToday`.
+
+*Constraint:* If `Available Today < 0`, Status = "Over Limit". If `Available Today` < 20% of `Daily Limit`, Status = "Careful".
