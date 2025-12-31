@@ -64,7 +64,7 @@ fun TransactionItem(
                 color = AppColors.Border,
                 shape = shape
             )
-            .padding(vertical = 20.dp, horizontal = 24.dp)
+            .padding(horizontal = 20.dp, vertical = 24.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),

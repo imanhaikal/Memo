@@ -14,10 +14,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.imanhaikal.memo.ui.components.MemoInput
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -97,42 +96,24 @@ fun SetupDialog(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Amount Input
-                OutlinedTextField(
+                MemoInput(
                     value = amountText,
                     onValueChange = { amountText = it },
-                    label = { Text("Total Budget") },
-                    placeholder = { Text("e.g. 1000") },
-                    singleLine = true,
+                    label = "Total Budget",
+                    placeholder = "e.g. 1000",
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AppColors.TextPrimary,
-                        unfocusedBorderColor = AppColors.Border,
-                        focusedLabelColor = AppColors.TextPrimary,
-                        cursorColor = AppColors.TextPrimary,
-                        focusedTextColor = AppColors.TextPrimary,
-                        unfocusedTextColor = AppColors.TextPrimary
-                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Days Input
-                OutlinedTextField(
+                MemoInput(
                     value = daysText,
                     onValueChange = { daysText = it },
-                    label = { Text("Number of Days") },
-                    placeholder = { Text("e.g. 30") },
-                    singleLine = true,
+                    label = "Number of Days",
+                    placeholder = "e.g. 30",
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AppColors.TextPrimary,
-                        unfocusedBorderColor = AppColors.Border,
-                        focusedLabelColor = AppColors.TextPrimary,
-                        cursorColor = AppColors.TextPrimary,
-                        focusedTextColor = AppColors.TextPrimary,
-                        unfocusedTextColor = AppColors.TextPrimary
-                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -147,15 +128,15 @@ fun SetupDialog(
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = AppColors.TextPrimary,
-                        contentColor = Color.White
+                        containerColor = AppColors.Yellow,
+                        contentColor = AppColors.TextPrimary
                     ),
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(50)
                 ) {
                     Text(
                         text = "Start Budget",
-                        style = MaterialTheme.typography.labelSmall
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                     )
                 }
             }

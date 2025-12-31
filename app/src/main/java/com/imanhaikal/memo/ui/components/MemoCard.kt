@@ -36,7 +36,7 @@ fun MemoCard(
             .background(AppColors.Surface)
             .border(
                 width = 1.dp,
-                color = Color.White.copy(alpha = 0.5f),
+                color = Color.White,
                 shape = shape
             )
             .padding(24.dp)

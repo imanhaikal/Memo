@@ -69,7 +69,7 @@ private fun StatCard(
         ) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Black),
                 color = AppColors.TextSecondary
             )
             Spacer(modifier = Modifier.height(4.dp))

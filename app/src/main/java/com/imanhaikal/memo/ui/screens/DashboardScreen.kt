@@ -46,7 +46,7 @@ fun DashboardScreen(
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = contentPadding,
-        verticalArrangement = Arrangement.spacedBy(24.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
             // Header with Staggered Entrance (Index 0)
@@ -54,13 +54,16 @@ fun DashboardScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                        .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 28.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = "Memo.",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Black, // Heavier weight for premium feel
+                            fontSize = MaterialTheme.typography.titleLarge.fontSize * 1.2f // Slightly larger
+                        ),
                         color = AppColors.TextPrimary
                     )
                     TextButton(onClick = onReset) {
@@ -79,7 +82,9 @@ fun DashboardScreen(
                 HeroSection(
                     availableAmount = state.availableToday,
                     status = state.status,
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 12.dp)
                 )
             }
         }

@@ -14,10 +14,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.imanhaikal.memo.ui.components.MemoInput
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -91,23 +90,14 @@ fun AddExpenseDialog(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Amount Input
-                OutlinedTextField(
+                MemoInput(
                     value = amountText,
                     onValueChange = { amountText = it },
-                    label = { Text("Amount") },
-                    placeholder = { Text("0.00") },
-                    singleLine = true,
+                    label = "Amount",
+                    placeholder = "0.00",
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Number,
                         imeAction = ImeAction.Next
-                    ),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AppColors.TextPrimary,
-                        unfocusedBorderColor = AppColors.Border,
-                        focusedLabelColor = AppColors.TextPrimary,
-                        cursorColor = AppColors.TextPrimary,
-                        focusedTextColor = AppColors.TextPrimary,
-                        unfocusedTextColor = AppColors.TextPrimary
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -115,23 +105,14 @@ fun AddExpenseDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Note Input
-                OutlinedTextField(
+                MemoInput(
                     value = noteText,
                     onValueChange = { noteText = it },
-                    label = { Text("Note") },
-                    placeholder = { Text("e.g. Lunch") },
-                    singleLine = true,
+                    label = "Note",
+                    placeholder = "e.g. Lunch",
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.Sentences,
                         imeAction = ImeAction.Done
-                    ),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AppColors.TextPrimary,
-                        unfocusedBorderColor = AppColors.Border,
-                        focusedLabelColor = AppColors.TextPrimary,
-                        cursorColor = AppColors.TextPrimary,
-                        focusedTextColor = AppColors.TextPrimary,
-                        unfocusedTextColor = AppColors.TextPrimary
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -146,15 +127,15 @@ fun AddExpenseDialog(
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = AppColors.TextPrimary,
-                        contentColor = Color.White
+                        containerColor = AppColors.Yellow,
+                        contentColor = AppColors.TextPrimary
                     ),
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(50)
                 ) {
                     Text(
                         text = "Add",
-                        style = MaterialTheme.typography.labelSmall
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                     )
                 }
             }

@@ -32,7 +32,7 @@ fun HeroSection(
         ) {
             Text(
                 text = "AVAILABLE TODAY",
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Black),
                 color = AppColors.TextSecondary,
                 textAlign = TextAlign.Center
             )
