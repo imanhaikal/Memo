@@ -10,7 +10,11 @@ The app features a "Premium Hardware" / "Clean Tech" design aesthetic, focusing 
 *   **Fluid Logic**: Spending less today automatically increases tomorrow's limit.
 *   **Real-time Status**: Visual indicators for "On Track" (Green), "Careful" (Gray), and "Over Limit" (Red) states.
 *   **Persistent Storage**: Transactions are saved using **Room Database**, and budget settings persist via **DataStore**.
-*   **Premium Motion**: Physics-based rolling numbers, staggered entrance animations, and smooth transitions.
+*   **Premium Motion & Feel**:
+    *   Physics-based rolling numbers.
+    *   Tactile spring animations (FAB, Dialogs).
+    *   Haptic feedback on interactions.
+    *   Staggered entrance animations and smooth transitions.
 *   **Privacy Focused**: All data is stored locally on the device.
 
 ## 🛠 Tech Stack
@@ -22,7 +26,7 @@ The app features a "Premium Hardware" / "Clean Tech" design aesthetic, focusing 
     *   Room Database (Transactions)
     *   Jetpack DataStore (Budget Settings)
 *   **Build System**: Gradle (Kotlin DSL)
-*   **Testing**: JUnit, Mockk, Turbine (Unit Tests)
+*   **Testing**: JUnit, Mockk, Turbine (Unit Tests), Espresso/Compose Test (UI Tests)
 
 ## 🏗 Architecture
 
@@ -71,7 +75,8 @@ c:/AndroidProjects/Memo
 │   │   ├── ui/             # Composable screens, components, viewmodels
 │   │   ├── ui/theme/       # Color, Type, Theme definitions
 │   │   └── MemoApplication.kt # Manual DI Container
-│   └── src/test/           # Unit tests (MainViewModelTest)
+│   ├── src/test/           # Unit tests (MainViewModelTest)
+│   └── src/androidTest/    # Instrumented UI tests (Phase5PolishTest)
 ├── gradle/                 # Gradle configuration and version catalog
 ├── REQUIREMENTS.md         # Detailed functional requirements
 ├── DESIGN.md               # UI/UX design specifications

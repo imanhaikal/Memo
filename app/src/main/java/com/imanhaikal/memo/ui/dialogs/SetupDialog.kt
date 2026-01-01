@@ -28,6 +28,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -46,6 +48,7 @@ fun SetupDialog(
 
     val scale = remember { Animatable(0.9f) }
     val alpha = remember { Animatable(0f) }
+    val haptic = LocalHapticFeedback.current
 
     LaunchedEffect(Unit) {
         launch {
@@ -121,6 +124,7 @@ fun SetupDialog(
 
                 Button(
                     onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         val amount = amountText.toDoubleOrNull()
                         val days = daysText.toIntOrNull()
                         if (amount != null && amount > 0 && days != null && days > 0) {

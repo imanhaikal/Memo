@@ -111,10 +111,18 @@ The design language is defined as "Premium Hardware" or "Clean Tech," prioritizi
     *   `Accent`: Sunday Yellow (`#F2E057`).
     *   `Ink`: Deep Black (`#111111`) for primary text.
 *   **Components:**
-    *   Custom Cards with soft, diffuse shadows (`elevation`) and subtle inner borders.
+    *   Custom Cards with soft, diffuse shadows (`elevation`) and subtle inner borders (1dp).
     *   **Rounded Shapes:** 32dp for major cards, 50% circle for FAB.
 
-### 5.2 Screen Flow
+### 5.2 Motion & Haptics ("Sunday Feel")
+*   **Physics-based Animations:**
+    *   **Rolling Numbers:** `Animatable` transitions for currency values.
+    *   **Springs:** Used for FAB scale (`Spring.DampingRatioMediumBouncy`) and dialog entrances.
+*   **Haptic Feedback:**
+    *   `LongPress` (Light Impact) triggered on FAB press, List Item clicks, and critical Button actions.
+    *   Provides tactile confirmation of user intent.
+
+### 5.3 Screen Flow
 1.  **Setup Dialog:** Initial onboarding to set budget amount and duration.
 2.  **Dashboard (Home):**
     *   **Hero:** Large "Available Today" display with status pill (On Track / Over Limit).
@@ -128,7 +136,9 @@ The design language is defined as "Premium Hardware" or "Clean Tech," prioritizi
 ## 6. Testing Strategy
 
 *   **Unit Tests:** `MainViewModelTest` verifies the core budgeting algorithm logic across various scenarios (spending, new day, over limit).
-*   **Instrumentation Tests:** `TransactionDaoTest` verifies database integrity on an Android device/emulator.
+*   **Instrumentation Tests:**
+    *   `TransactionDaoTest`: Verifies database integrity on an Android device/emulator.
+    *   `Phase5PolishTest`: Verifies UI polish features (FAB interactions, Input focus, Haptics triggers) using Compose Test Rule.
 
 ---
 

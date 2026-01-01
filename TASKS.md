@@ -116,13 +116,13 @@
 - [x] **Interactive Physics**
     - [x] Add `scale` animation on FAB press (`Modifier.clickable` interaction source).
     - [x] Add `spring` spec to BottomSheet open/close.
-- [ ] **Haptics**
-    - [ ] Add `LocalHapticFeedback` triggers on:
-        - [ ] Button Taps.
-        - [ ] Rolling number completion (subtle).
-- [ ] **Refinements**
-    - [ ] Adjust Shadows: Use `ambientColor` and `spotColor` for soft diffusion.
-    - [ ] Input Fields: Remove underline, use custom background shapes.
+- [x] **Haptics**
+    - [x] Add `LocalHapticFeedback` triggers on:
+        - [x] Button Taps.
+        - [x] Rolling number completion (subtle).
+- [x] **Refinements**
+    - [x] Adjust Shadows: Use `ambientColor` and `spotColor` for soft diffusion.
+    - [x] Input Fields: Remove underline, use custom background shapes.
 
 ---
 

@@ -50,9 +50,9 @@ fun MemoInput(
     
     // Determine border style based on focus
     val borderModifier = if (isFocused) {
-        Modifier.border(2.dp, AppColors.TextPrimary, shape)
+        Modifier.border(2.dp, AppColors.Yellow, shape)
     } else {
-        Modifier
+        Modifier.border(1.dp, Color.Transparent, shape) // Transparent border to prevent layout shift
     }
 
     BasicTextField(

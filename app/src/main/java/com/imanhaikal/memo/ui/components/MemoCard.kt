@@ -29,14 +29,14 @@ fun MemoCard(
             .shadow(
                 elevation = elevation,
                 shape = shape,
-                ambientColor = Color(0x10000000),
-                spotColor = Color(0x05000000)
+                ambientColor = Color(0x0A000000), // Very subtle ambient
+                spotColor = Color(0x05000000) // Very subtle spot
             )
             .clip(shape)
             .background(AppColors.Surface)
             .border(
                 width = 1.dp,
-                color = Color.White,
+                color = AppColors.Border, // Use designated border color
                 shape = shape
             )
             .padding(24.dp)
