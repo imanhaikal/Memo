@@ -1,6 +1,5 @@
 package com.imanhaikal.memo.ui.components
 
-import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -11,8 +10,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
+import com.imanhaikal.memo.utils.rememberStrongHaptics
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.drop
 import java.text.NumberFormat
@@ -27,7 +26,7 @@ fun RollingCurrency(
 ) {
     // We use Float for animation performance, assuming budget values fit within Float precision for display
     val animatedValue = remember { Animatable(value.toFloat()) }
-    val view = LocalView.current
+    val strongHaptics = rememberStrongHaptics()
 
     LaunchedEffect(value) {
         animatedValue.animateTo(
@@ -43,7 +42,7 @@ fun RollingCurrency(
         snapshotFlow { animatedValue.value.toInt() }
             .drop(1)
             .collect {
-                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                strongHaptics.performClick()
             }
     }
 
