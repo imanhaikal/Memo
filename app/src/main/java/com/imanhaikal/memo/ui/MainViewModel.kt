@@ -100,14 +100,15 @@ class MainViewModel(
         }.sumOf { it.amount }
 
         // Logic Replication:
-        // poolStartOfDay = totalBudget - (spentTotal - spentToday)
-        val poolStartOfDay = totalBudget - (spentTotal - spentToday)
+        // We use current pool (TotalBudget - SpentTotal) to allow continuous updates intra-day.
+        // This means if you spend money now, your daily limit for the rest of the day (and future days) adapts immediately.
+        val currentPool = totalBudget - spentTotal
 
-        // dailyLimit = poolStartOfDay / daysRemaining
-        // If poolStartOfDay is negative, dailyLimit will be negative (which is correct behavior per reqs to show 0/negative)
+        // dailyLimit = currentPool / daysRemaining
+        // If currentPool is negative, dailyLimit will be negative (which is correct behavior per reqs to show 0/negative)
         // However, requirements say: "If Pool becomes negative... newDailyLimit should be 0"
-        val rawDailyLimit = poolStartOfDay / daysRemaining
-        val dailyLimit = if (poolStartOfDay < 0) 0.0 else rawDailyLimit
+        val rawDailyLimit = currentPool / daysRemaining
+        val dailyLimit = if (currentPool < 0) 0.0 else rawDailyLimit
 
         // availableToday = dailyLimit - spentToday
         val availableToday = dailyLimit - spentToday

@@ -107,14 +107,18 @@ class MainViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
         val state = viewModel.uiState.value
 
-        // Calculation:
-        // Pool Start Of Day = 3000 - (50 - 50) = 3000
-        // Daily Limit = 3000 / 30 = 100
-        // Available Today = 100 - 50 = 50
+        // Calculation (Continuous Amortization):
+        // Total Budget = 3000
+        // Spent Total = 50
+        // Current Pool = 3000 - 50 = 2950
+        // Days Remaining = 30
+        // Daily Limit = 2950 / 30 = 98.333...
+        // Spent Today = 50
+        // Available Today = 98.333... - 50 = 48.333...
         
         assertEquals(50.0, state.spentToday, 0.01)
-        assertEquals(100.0, state.dailyLimit, 0.01)
-        assertEquals(50.0, state.availableToday, 0.01)
+        assertEquals(98.33, state.dailyLimit, 0.01)
+        assertEquals(48.33, state.availableToday, 0.01)
         assertEquals(BudgetStatus.ON_TRACK, state.status)
     }
 
