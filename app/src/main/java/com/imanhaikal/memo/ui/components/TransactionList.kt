@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.ui.theme.AppColors
+import com.imanhaikal.memo.utils.rememberStrongHaptics
 import java.text.NumberFormat
 import java.time.Instant
 import java.time.ZoneId
@@ -56,14 +57,14 @@ fun TransactionItem(
     modifier: Modifier = Modifier
 ) {
     val shape = RoundedCornerShape(16.dp)
-    val haptic = LocalHapticFeedback.current
+    val haptic = rememberStrongHaptics()
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
             .clickable {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                haptic.performClick()
             }
             .background(AppColors.Surface)
             .border(

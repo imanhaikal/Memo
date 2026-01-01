@@ -23,13 +23,14 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import com.imanhaikal.memo.ui.theme.AppColors
+import com.imanhaikal.memo.utils.rememberStrongHaptics
 
 @Composable
 fun MemoFab(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val haptic = LocalHapticFeedback.current
+    val haptic = rememberStrongHaptics()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
@@ -44,13 +45,13 @@ fun MemoFab(
 
     LaunchedEffect(isPressed) {
         if (isPressed) {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            haptic.performClick()
         }
     }
 
     ExtendedFloatingActionButton(
         onClick = {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            haptic.performClick()
             onClick()
         },
         modifier = modifier.scale(scale),

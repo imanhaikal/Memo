@@ -32,6 +32,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import com.imanhaikal.memo.utils.rememberStrongHaptics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -50,7 +51,7 @@ fun AddExpenseDialog(
 
     val scale = remember { Animatable(0.9f) }
     val alpha = remember { Animatable(0f) }
-    val haptic = LocalHapticFeedback.current
+    val haptic = rememberStrongHaptics()
 
     LaunchedEffect(Unit) {
         launch {
@@ -124,7 +125,7 @@ fun AddExpenseDialog(
 
                 Button(
                     onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        haptic.performClick()
                         val amount = amountText.toDoubleOrNull()
                         if (amount != null && amount > 0) {
                             onConfirm(amount, noteText)
