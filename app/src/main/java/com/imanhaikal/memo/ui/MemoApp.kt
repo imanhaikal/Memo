@@ -16,6 +16,7 @@ import com.imanhaikal.memo.ui.components.MemoFab
 import com.imanhaikal.memo.ui.dialogs.AddExpenseDialog
 import com.imanhaikal.memo.ui.dialogs.SetupDialog
 import com.imanhaikal.memo.ui.screens.DashboardScreen
+import com.imanhaikal.memo.ui.screens.SettingsScreen
 import com.imanhaikal.memo.ui.theme.AppColors
 
 @Composable
@@ -24,6 +25,7 @@ fun MemoApp(
 ) {
     val state by viewModel.uiState.collectAsState()
     var showAddExpenseDialog by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -32,8 +34,8 @@ fun MemoApp(
         // Main Scaffold
         Scaffold(
             floatingActionButton = {
-                // Only show FAB if setup is complete
-                if (state.isSetup) {
+                // Only show FAB if setup is complete and not in settings
+                if (state.isSetup && !showSettings) {
                     MemoFab(onClick = { showAddExpenseDialog = true })
                 }
             },
@@ -43,8 +45,8 @@ fun MemoApp(
                 if (!state.isSetup) {
                     // Show Setup Dialog (Overlay)
                     // We can still show the dashboard behind it or just the dialog.
-                    // Given the design usually implies a modal over content, but if not setup, 
-                    // the content might be empty or confusing. 
+                    // Given the design usually implies a modal over content, but if not setup,
+                    // the content might be empty or confusing.
                     // However, DashboardScreen handles empty states gracefully (usually).
                     // But to force setup, we show the dialog.
                     SetupDialog(
@@ -53,11 +55,23 @@ fun MemoApp(
                         },
                         onDismiss = { /* Not dismissible until setup */ }
                     )
+                } else if (showSettings) {
+                    SettingsScreen(
+                        state = state,
+                        onBack = { showSettings = false },
+                        onSave = { amount, days ->
+                            viewModel.updateBudget(amount, days)
+                        },
+                        onReset = {
+                            viewModel.resetBudget()
+                            showSettings = false
+                        }
+                    )
                 } else {
                     // Show Dashboard
                     DashboardScreen(
                         state = state,
-                        onReset = { viewModel.resetBudget() },
+                        onOpenSettings = { showSettings = true },
                         contentPadding = innerPadding
                     )
                 }

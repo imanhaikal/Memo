@@ -33,7 +33,8 @@ data class BudgetUiState(
     val transactions: List<Transaction> = emptyList(),
     val status: BudgetStatus = BudgetStatus.ON_TRACK,
     val totalBudget: Double = 0.0,
-    val spentToday: Double = 0.0
+    val spentToday: Double = 0.0,
+    val totalDays: Int = 30
 )
 
 class MainViewModel(
@@ -70,7 +71,8 @@ class MainViewModel(
             return BudgetUiState(
                 isLoading = false,
                 isSetup = false,
-                transactions = transactions
+                transactions = transactions,
+                totalDays = totalDays
             )
         }
 
@@ -131,7 +133,8 @@ class MainViewModel(
             transactions = transactions,
             status = status,
             totalBudget = totalBudget,
-            spentToday = spentToday
+            spentToday = spentToday,
+            totalDays = totalDays
         )
     }
 
@@ -140,6 +143,12 @@ class MainViewModel(
             // When setting up a new budget, we start from NOW
             val startDate = System.currentTimeMillis()
             budgetPreferences.saveBudgetSettings(amount, startDate, days)
+        }
+    }
+
+    fun updateBudget(amount: Double, days: Int) {
+        viewModelScope.launch {
+            budgetPreferences.updateBudgetConfig(amount, days)
         }
     }
 

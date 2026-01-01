@@ -16,8 +16,11 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -39,7 +42,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun DashboardScreen(
     state: BudgetUiState,
-    onReset: () -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp)
 ) {
@@ -66,11 +69,11 @@ fun DashboardScreen(
                         ),
                         color = AppColors.TextPrimary
                     )
-                    TextButton(onClick = onReset) {
-                        Text(
-                            text = "Reset",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = AppColors.TextSecondary
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = AppColors.TextSecondary
                         )
                     }
                 }

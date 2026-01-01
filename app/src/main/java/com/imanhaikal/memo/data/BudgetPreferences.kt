@@ -40,4 +40,11 @@ class BudgetPreferences(private val context: Context) {
             preferences[TOTAL_DAYS] = days
         }
     }
+
+    suspend fun updateBudgetConfig(budget: Double, days: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[TOTAL_BUDGET] = budget
+            preferences[TOTAL_DAYS] = days
+        }
+    }
 }
