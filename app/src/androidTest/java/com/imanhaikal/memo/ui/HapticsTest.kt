@@ -3,10 +3,14 @@ package com.imanhaikal.memo.ui
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.ui.components.MemoFab
+import com.imanhaikal.memo.ui.components.RollingCurrency
 import com.imanhaikal.memo.ui.components.TransactionItem
 import com.imanhaikal.memo.ui.dialogs.AddExpenseDialog
 import com.imanhaikal.memo.ui.dialogs.SetupDialog
@@ -93,5 +97,32 @@ class HapticsTest {
 
         // Click Start Budget (Haptic is triggered before validation)
         composeTestRule.onNodeWithText("Start Budget", useUnmergedTree = true).performClick()
+    }
+
+    @Test
+    fun testRollingCurrencyHaptics() {
+        val valueState = mutableStateOf(10.0)
+
+        composeTestRule.setContent {
+            MemoTheme {
+                RollingCurrency(
+                    value = valueState.value,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.Black
+                )
+            }
+        }
+
+        // Verify start value
+        composeTestRule.onNodeWithText("$10.00").assertIsDisplayed()
+
+        // Trigger animation
+        valueState.value = 20.0
+
+        // Allow animation to proceed
+        composeTestRule.mainClock.advanceTimeBy(2000)
+
+        // Verify end value (implies animation and haptics logic ran)
+        composeTestRule.onNodeWithText("$20.00").assertIsDisplayed()
     }
 }

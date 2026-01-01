@@ -58,8 +58,8 @@ To build and run this project locally:
     *   Ensure Gradle Sync completes successfully.
 
 4.  **Run Tests**:
-    *   Run Unit Tests: `./gradlew testDebugUnitTest`
-    *   Run UI/DB Tests: `./gradlew connectedAndroidTest` (Requires connected device/emulator).
+    *   Run Unit Tests: `gradlew testDebugUnitTest`
+    *   Run UI/DB Tests: `gradlew connectedAndroidTest` (Requires connected device/emulator).
 
 5.  **Build and Run**:
     *   Select a connected device or emulator (API Level 26+ recommended).
