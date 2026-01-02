@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.ui.BudgetUiState
 import com.imanhaikal.memo.ui.components.HeroSection
 import com.imanhaikal.memo.ui.components.StatsGrid
@@ -43,6 +44,8 @@ import kotlinx.coroutines.delay
 fun DashboardScreen(
     state: BudgetUiState,
     onOpenSettings: () -> Unit,
+    onEditTransaction: (Transaction) -> Unit,
+    onDeleteTransaction: (Transaction) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp)
 ) {
@@ -122,6 +125,8 @@ fun DashboardScreen(
                 // We'll use a simple animation for them as they appear
                 TransactionItem(
                     transaction = transaction,
+                    onClick = { onEditTransaction(transaction) },
+                    onDelete = { onDeleteTransaction(transaction) },
                     modifier = Modifier
                         .padding(horizontal = 16.dp)
                         .animateItemPlacement()

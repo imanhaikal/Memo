@@ -12,8 +12,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.ui.components.MemoFab
 import com.imanhaikal.memo.ui.dialogs.AddExpenseDialog
+import com.imanhaikal.memo.ui.dialogs.DeleteConfirmationDialog
 import com.imanhaikal.memo.ui.dialogs.SetupDialog
 import com.imanhaikal.memo.ui.screens.DashboardScreen
 import com.imanhaikal.memo.ui.screens.SettingsScreen
@@ -25,6 +27,8 @@ fun MemoApp(
 ) {
     val state by viewModel.uiState.collectAsState()
     var showAddExpenseDialog by remember { mutableStateOf(false) }
+    var transactionToEdit by remember { mutableStateOf<Transaction?>(null) }
+    var transactionToDelete by remember { mutableStateOf<Transaction?>(null) }
     var showSettings by remember { mutableStateOf(false) }
 
     Surface(
@@ -36,7 +40,10 @@ fun MemoApp(
             floatingActionButton = {
                 // Only show FAB if setup is complete and not in settings
                 if (state.isSetup && !showSettings) {
-                    MemoFab(onClick = { showAddExpenseDialog = true })
+                    MemoFab(onClick = {
+                        transactionToEdit = null
+                        showAddExpenseDialog = true
+                    })
                 }
             },
             containerColor = AppColors.Background
@@ -72,17 +79,52 @@ fun MemoApp(
                     DashboardScreen(
                         state = state,
                         onOpenSettings = { showSettings = true },
+                        onEditTransaction = { transaction ->
+                            transactionToEdit = transaction
+                            showAddExpenseDialog = true
+                        },
+                        onDeleteTransaction = { transaction ->
+                            transactionToDelete = transaction
+                        },
                         contentPadding = innerPadding
                     )
                 }
 
                 if (showAddExpenseDialog) {
                     AddExpenseDialog(
+                        transaction = transactionToEdit,
                         onConfirm = { amount, note ->
-                            viewModel.addTransaction(amount, note)
+                            if (transactionToEdit != null) {
+                                viewModel.updateTransaction(transactionToEdit!!.copy(amount = amount, note = note))
+                            } else {
+                                viewModel.addTransaction(amount, note)
+                            }
                             showAddExpenseDialog = false
+                            transactionToEdit = null
                         },
-                        onDismiss = { showAddExpenseDialog = false }
+                        onDelete = if (transactionToEdit != null) {
+                            {
+                                transactionToDelete = transactionToEdit
+                                showAddExpenseDialog = false
+                                transactionToEdit = null
+                            }
+                        } else null,
+                        onDismiss = {
+                            showAddExpenseDialog = false
+                            transactionToEdit = null
+                        }
+                    )
+                }
+
+                if (transactionToDelete != null) {
+                    DeleteConfirmationDialog(
+                        onConfirm = {
+                            viewModel.deleteTransaction(transactionToDelete!!)
+                            transactionToDelete = null
+                        },
+                        onDismiss = {
+                            transactionToDelete = null
+                        }
                     )
                 }
             }

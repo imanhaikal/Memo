@@ -162,6 +162,12 @@ class MainViewModel(
             transactionDao.insertTransaction(newTransaction)
         }
     }
+
+    fun updateTransaction(transaction: Transaction) {
+        viewModelScope.launch {
+            transactionDao.insertTransaction(transaction)
+        }
+    }
     
     fun deleteTransaction(transaction: Transaction) {
         viewModelScope.launch {

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -15,15 +16,23 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.ui.theme.AppColors
@@ -37,6 +46,7 @@ import java.util.Locale
 @Composable
 fun TransactionList(
     transactions: List<Transaction>,
+    onDelete: (Transaction) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp)
 ) {
@@ -46,72 +56,121 @@ fun TransactionList(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(transactions, key = { it.id }) { transaction ->
-            TransactionItem(transaction = transaction)
+            TransactionItem(
+                transaction = transaction,
+                onDelete = { onDelete(transaction) }
+            )
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionItem(
     transaction: Transaction,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {},
+    onDelete: () -> Unit = {}
 ) {
+    val currentOnDelete by rememberUpdatedState(onDelete)
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = {
+            if (it == SwipeToDismissBoxValue.EndToStart) {
+                currentOnDelete()
+                false
+            } else {
+                false
+            }
+        }
+    )
     val shape = RoundedCornerShape(16.dp)
-    val haptic = rememberStrongHaptics()
 
-    Box(
+    SwipeToDismissBox(
+        state = dismissState,
         modifier = modifier
             .fillMaxWidth()
-            .clip(shape)
-            .clickable {
-                haptic.performClick()
+            .clip(shape),
+        backgroundContent = {
+            val color = if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
+                AppColors.Red
+            } else {
+                Color.Transparent
             }
-            .background(AppColors.Surface)
-            .border(
-                width = 1.dp,
-                color = AppColors.Border,
-                shape = shape
-            )
-            .padding(horizontal = 20.dp, vertical = 24.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = transaction.note.ifBlank { "Expense" },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = AppColors.TextPrimary
-                )
-                
-                val dateStr = try {
-                    val instant = Instant.ofEpochMilli(transaction.date)
-                    val formatter = DateTimeFormatter.ofPattern("MMM d, h:mm a")
-                        .withZone(ZoneId.systemDefault())
-                    formatter.format(instant)
-                } catch (e: Exception) {
-                    ""
-                }
 
-                if (dateStr.isNotEmpty()) {
-                    Text(
-                        text = dateStr,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = AppColors.TextTertiary
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(color)
+                    .padding(end = 24.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = Color.White
                     )
                 }
             }
+        },
+        content = {
+            val haptic = rememberStrongHaptics()
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        haptic.performClick()
+                        onClick()
+                    }
+                    .background(AppColors.Surface)
+                    .border(
+                        width = 1.dp,
+                        color = AppColors.Border,
+                        shape = shape
+                    )
+                    .padding(horizontal = 20.dp, vertical = 24.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = transaction.note.ifBlank { "Expense" },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = AppColors.TextPrimary
+                        )
+                        
+                        val dateStr = try {
+                            val instant = Instant.ofEpochMilli(transaction.date)
+                            val formatter = DateTimeFormatter.ofPattern("MMM d, h:mm a")
+                                .withZone(ZoneId.systemDefault())
+                            formatter.format(instant)
+                        } catch (e: Exception) {
+                            ""
+                        }
 
-            val formattedAmount = NumberFormat.getCurrencyInstance(Locale.US).format(transaction.amount)
-            Text(
-                text = formattedAmount,
-                style = MaterialTheme.typography.titleMedium,
-                color = AppColors.TextPrimary
-            )
+                        if (dateStr.isNotEmpty()) {
+                            Text(
+                                text = dateStr,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = AppColors.TextTertiary
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    val formattedAmount = NumberFormat.getCurrencyInstance(Locale.US).format(transaction.amount)
+                    Text(
+                        text = formattedAmount,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = AppColors.TextPrimary
+                    )
+                }
+            }
         }
-    }
+    )
 }

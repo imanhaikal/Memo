@@ -17,6 +17,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import com.imanhaikal.memo.ui.components.MemoInput
+import com.imanhaikal.memo.data.Transaction
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,11 +51,13 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun AddExpenseDialog(
+    transaction: Transaction? = null,
     onConfirm: (amount: Double, note: String) -> Unit,
+    onDelete: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
-    var amountText by remember { mutableStateOf("") }
-    var noteText by remember { mutableStateOf("") }
+    var amountText by remember { mutableStateOf(transaction?.amount?.toString() ?: "") }
+    var noteText by remember { mutableStateOf(transaction?.note ?: "") }
 
     val scale = remember { Animatable(0.9f) }
     val alpha = remember { Animatable(0f) }
@@ -86,7 +96,7 @@ fun AddExpenseDialog(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Add Expense",
+                    text = if (transaction == null) "Add Expense" else "Edit Expense",
                     style = MaterialTheme.typography.titleMedium,
                     color = AppColors.TextPrimary
                 )
@@ -123,25 +133,59 @@ fun AddExpenseDialog(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                Button(
-                    onClick = {
-                        haptic.performClick()
-                        val amount = amountText.toDoubleOrNull()
-                        if (amount != null && amount > 0) {
-                            onConfirm(amount, noteText)
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = AppColors.Yellow,
-                        contentColor = AppColors.TextPrimary
-                    ),
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(50)
+                    horizontalArrangement = Arrangement.spacedBy(0.dp), // Reset arrangement
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Add",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                    )
+                    if (transaction != null && onDelete != null) {
+                        OutlinedButton(
+                            onClick = {
+                                haptic.performClick()
+                                onDelete()
+                            },
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = AppColors.Red
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Red),
+                            modifier = Modifier
+                                .width(50.dp)
+                                .height(50.dp),
+                            shape = RoundedCornerShape(50),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = AppColors.Red
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+                    }
+
+                    Button(
+                        onClick = {
+                            haptic.performClick()
+                            val amount = amountText.toDoubleOrNull()
+                            if (amount != null && amount > 0) {
+                                onConfirm(amount, noteText)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AppColors.Yellow,
+                            contentColor = AppColors.TextPrimary
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(50.dp),
+                        shape = RoundedCornerShape(50)
+                    ) {
+                        Text(
+                            text = if (transaction == null) "Add" else "Save",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                        )
+                    }
                 }
             }
         }
