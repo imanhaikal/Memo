@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -19,6 +20,7 @@ class BudgetPreferences(private val context: Context) {
         val TOTAL_BUDGET = doublePreferencesKey("total_budget")
         val CYCLE_START_DATE = longPreferencesKey("cycle_start_date") // Epoch millis
         val TOTAL_DAYS = intPreferencesKey("total_days")
+        val CURRENCY = stringPreferencesKey("currency_code")
     }
 
     val totalBudget: Flow<Double> = context.dataStore.data.map { preferences ->
@@ -33,18 +35,24 @@ class BudgetPreferences(private val context: Context) {
         preferences[TOTAL_DAYS] ?: 30 // Default to 30 days
     }
 
-    suspend fun saveBudgetSettings(budget: Double, startDate: Long, days: Int) {
+    val currency: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[CURRENCY] ?: "USD"
+    }
+
+    suspend fun saveBudgetSettings(budget: Double, startDate: Long, days: Int, currency: String = "USD") {
         context.dataStore.edit { preferences ->
             preferences[TOTAL_BUDGET] = budget
             preferences[CYCLE_START_DATE] = startDate
             preferences[TOTAL_DAYS] = days
+            preferences[CURRENCY] = currency
         }
     }
 
-    suspend fun updateBudgetConfig(budget: Double, days: Int) {
+    suspend fun updateBudgetConfig(budget: Double, days: Int, currency: String) {
         context.dataStore.edit { preferences ->
             preferences[TOTAL_BUDGET] = budget
             preferences[TOTAL_DAYS] = days
+            preferences[CURRENCY] = currency
         }
     }
 }

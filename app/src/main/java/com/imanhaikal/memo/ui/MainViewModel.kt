@@ -34,7 +34,8 @@ data class BudgetUiState(
     val status: BudgetStatus = BudgetStatus.ON_TRACK,
     val totalBudget: Double = 0.0,
     val spentToday: Double = 0.0,
-    val totalDays: Int = 30
+    val totalDays: Int = 30,
+    val currencyCode: String = "USD"
 )
 
 class MainViewModel(
@@ -45,13 +46,16 @@ class MainViewModel(
     private val _systemTimeOverride = MutableStateFlow<Long?>(null) // For testing logic if needed, or forcing updates
 
     val uiState: StateFlow<BudgetUiState> = combine(
-        transactionDao.getAllTransactions(),
+        combine(
+            transactionDao.getAllTransactions(),
+            _systemTimeOverride
+        ) { transactions, systemTimeOverride -> Pair(transactions, systemTimeOverride) },
         budgetPreferences.totalBudget,
         budgetPreferences.cycleStartDate,
         budgetPreferences.totalDays,
-        _systemTimeOverride
-    ) { transactions, totalBudget, cycleStartDate, totalDays, systemTimeOverride ->
-        calculateBudget(transactions, totalBudget, cycleStartDate, totalDays, systemTimeOverride)
+        budgetPreferences.currency
+    ) { (transactions, systemTimeOverride), totalBudget, cycleStartDate, totalDays, currency ->
+        calculateBudget(transactions, totalBudget, cycleStartDate, totalDays, currency, systemTimeOverride)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -63,6 +67,7 @@ class MainViewModel(
         totalBudget: Double,
         cycleStartDate: Long,
         totalDays: Int,
+        currency: String,
         systemTimeOverride: Long?
     ): BudgetUiState {
         // Basic Setup Check
@@ -72,7 +77,8 @@ class MainViewModel(
                 isLoading = false,
                 isSetup = false,
                 transactions = transactions,
-                totalDays = totalDays
+                totalDays = totalDays,
+                currencyCode = currency
             )
         }
 
@@ -134,21 +140,22 @@ class MainViewModel(
             status = status,
             totalBudget = totalBudget,
             spentToday = spentToday,
-            totalDays = totalDays
+            totalDays = totalDays,
+            currencyCode = currency
         )
     }
 
-    fun setupBudget(amount: Double, days: Int) {
+    fun setupBudget(amount: Double, days: Int, currency: String = "USD") {
         viewModelScope.launch {
             // When setting up a new budget, we start from NOW
             val startDate = System.currentTimeMillis()
-            budgetPreferences.saveBudgetSettings(amount, startDate, days)
+            budgetPreferences.saveBudgetSettings(amount, startDate, days, currency)
         }
     }
 
-    fun updateBudget(amount: Double, days: Int) {
+    fun updateBudget(amount: Double, days: Int, currency: String) {
         viewModelScope.launch {
-            budgetPreferences.updateBudgetConfig(amount, days)
+            budgetPreferences.updateBudgetConfig(amount, days, currency)
         }
     }
 

@@ -66,8 +66,8 @@ fun MemoApp(
                     SettingsScreen(
                         state = state,
                         onBack = { showSettings = false },
-                        onSave = { amount, days ->
-                            viewModel.updateBudget(amount, days)
+                        onSave = { amount, days, currency ->
+                            viewModel.updateBudget(amount, days, currency)
                         },
                         onReset = {
                             viewModel.resetBudget()

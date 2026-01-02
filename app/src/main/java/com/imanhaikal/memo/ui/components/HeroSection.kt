@@ -23,7 +23,8 @@ import com.imanhaikal.memo.ui.theme.AppColors
 fun HeroSection(
     availableAmount: Double,
     status: BudgetStatus,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    currencyCode: String = "USD"
 ) {
     MemoCard(modifier = modifier) {
         Column(
@@ -43,7 +44,8 @@ fun HeroSection(
                 value = availableAmount,
                 style = MaterialTheme.typography.displayLarge,
                 color = AppColors.TextPrimary,
-                modifier = Modifier
+                modifier = Modifier,
+                currencyCode = currencyCode
             )
 
             Spacer(modifier = Modifier.height(16.dp))

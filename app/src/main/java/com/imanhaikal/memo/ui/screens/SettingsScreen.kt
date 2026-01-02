@@ -22,9 +22,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -43,12 +46,13 @@ import androidx.compose.ui.unit.dp
 import com.imanhaikal.memo.ui.BudgetUiState
 import com.imanhaikal.memo.ui.components.MemoInput
 import com.imanhaikal.memo.ui.theme.AppColors
+import com.imanhaikal.memo.utils.CurrencyUtils
 
 @Composable
 fun SettingsScreen(
     state: BudgetUiState,
     onBack: () -> Unit,
-    onSave: (Double, Int) -> Unit,
+    onSave: (Double, Int, String) -> Unit,
     onReset: () -> Unit
 ) {
     var budgetInput by remember {
@@ -58,6 +62,8 @@ fun SettingsScreen(
         )
     }
     var daysInput by remember { mutableStateOf(state.totalDays.toString()) }
+    var selectedCurrency by remember { mutableStateOf(state.currencyCode) }
+    var showCurrencyDropdown by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
 
     // Update inputs when state changes (e.g. initial load)
@@ -79,7 +85,8 @@ fun SettingsScreen(
     val currentDays = daysInput.toIntOrNull()
     
     val hasChanges = (currentBudget != null && currentBudget != state.totalBudget) ||
-                     (currentDays != null && currentDays != state.totalDays)
+                     (currentDays != null && currentDays != state.totalDays) ||
+                     (selectedCurrency != state.currencyCode)
     val isValid = currentBudget != null && currentBudget > 0 && currentDays != null && currentDays > 0
 
     Column(
@@ -119,6 +126,57 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.titleMedium,
                 color = AppColors.TextSecondary
             )
+
+            // Currency Selector
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Currency",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = AppColors.TextPrimary
+                )
+                
+                Box {
+                    OutlinedButton(
+                        onClick = { showCurrencyDropdown = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = AppColors.TextPrimary,
+                            containerColor = AppColors.Surface
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Border)
+                    ) {
+                        Text(
+                            text = CurrencyUtils.SUPPORTED_CURRENCIES[selectedCurrency] ?: selectedCurrency,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(vertical = 4.dp).weight(1f),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Start
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showCurrencyDropdown,
+                        onDismissRequest = { showCurrencyDropdown = false },
+                        modifier = Modifier.background(AppColors.Surface)
+                    ) {
+                        CurrencyUtils.SUPPORTED_CURRENCIES.forEach { (code, label) ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = label,
+                                        color = if(code == selectedCurrency) AppColors.TextPrimary else AppColors.TextSecondary,
+                                        fontWeight = if(code == selectedCurrency) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                },
+                                onClick = {
+                                    selectedCurrency = code
+                                    showCurrencyDropdown = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
@@ -163,7 +221,7 @@ fun SettingsScreen(
             Button(
                 onClick = {
                     if (isValid) {
-                        onSave(currentBudget!!, currentDays!!)
+                        onSave(currentBudget!!, currentDays!!, selectedCurrency)
                         onBack() // Go back after saving
                     }
                 },

@@ -37,18 +37,18 @@ import androidx.compose.ui.unit.dp
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.ui.theme.AppColors
 import com.imanhaikal.memo.utils.rememberStrongHaptics
-import java.text.NumberFormat
+import com.imanhaikal.memo.utils.CurrencyUtils
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 @Composable
 fun TransactionList(
     transactions: List<Transaction>,
     onDelete: (Transaction) -> Unit,
     modifier: Modifier = Modifier,
-    contentPadding: PaddingValues = PaddingValues(0.dp)
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    currencyCode: String = "USD"
 ) {
     LazyColumn(
         modifier = modifier,
@@ -58,7 +58,8 @@ fun TransactionList(
         items(transactions, key = { it.id }) { transaction ->
             TransactionItem(
                 transaction = transaction,
-                onDelete = { onDelete(transaction) }
+                onDelete = { onDelete(transaction) },
+                currencyCode = currencyCode
             )
         }
     }
@@ -70,7 +71,8 @@ fun TransactionItem(
     transaction: Transaction,
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {},
-    onDelete: () -> Unit = {}
+    onDelete: () -> Unit = {},
+    currencyCode: String = "USD"
 ) {
     val currentOnDelete by rememberUpdatedState(onDelete)
     val dismissState = rememberSwipeToDismissBoxState(
@@ -163,7 +165,7 @@ fun TransactionItem(
 
                     Spacer(modifier = Modifier.width(16.dp))
 
-                    val formattedAmount = NumberFormat.getCurrencyInstance(Locale.US).format(transaction.amount)
+                    val formattedAmount = CurrencyUtils.formatCurrency(transaction.amount, currencyCode)
                     Text(
                         text = formattedAmount,
                         style = MaterialTheme.typography.titleMedium,

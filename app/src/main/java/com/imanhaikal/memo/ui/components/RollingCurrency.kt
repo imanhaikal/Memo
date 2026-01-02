@@ -14,15 +14,15 @@ import androidx.compose.ui.text.TextStyle
 import com.imanhaikal.memo.utils.rememberStrongHaptics
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.drop
-import java.text.NumberFormat
-import java.util.Locale
+import com.imanhaikal.memo.utils.CurrencyUtils
 
 @Composable
 fun RollingCurrency(
     value: Double,
     style: TextStyle,
     color: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    currencyCode: String = "USD"
 ) {
     // We use Float for animation performance, assuming budget values fit within Float precision for display
     val animatedValue = remember { Animatable(value.toFloat()) }
@@ -47,7 +47,7 @@ fun RollingCurrency(
     }
 
     Text(
-        text = NumberFormat.getCurrencyInstance(Locale.US).format(animatedValue.value),
+        text = CurrencyUtils.formatCurrency(animatedValue.value.toDouble(), currencyCode),
         style = style,
         color = color,
         modifier = modifier

@@ -21,7 +21,8 @@ import java.util.Locale
 fun StatsGrid(
     dailyLimit: Double,
     daysRemaining: Int,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    currencyCode: String = "USD"
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -33,7 +34,8 @@ fun StatsGrid(
                 RollingCurrency(
                     value = dailyLimit,
                     style = MaterialTheme.typography.titleMedium,
-                    color = AppColors.TextPrimary
+                    color = AppColors.TextPrimary,
+                    currencyCode = currencyCode
                 )
             },
             modifier = Modifier.weight(1f)

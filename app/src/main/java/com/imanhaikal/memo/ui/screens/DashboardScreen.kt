@@ -88,6 +88,7 @@ fun DashboardScreen(
                 HeroSection(
                     availableAmount = state.availableToday,
                     status = state.status,
+                    currencyCode = state.currencyCode,
                     modifier = Modifier
                         .padding(horizontal = 16.dp)
                         .padding(bottom = 12.dp)
@@ -100,6 +101,7 @@ fun DashboardScreen(
                 StatsGrid(
                     dailyLimit = state.dailyLimit,
                     daysRemaining = state.daysRemaining,
+                    currencyCode = state.currencyCode,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
             }
@@ -127,6 +129,7 @@ fun DashboardScreen(
                     transaction = transaction,
                     onClick = { onEditTransaction(transaction) },
                     onDelete = { onDeleteTransaction(transaction) },
+                    currencyCode = state.currencyCode,
                     modifier = Modifier
                         .padding(horizontal = 16.dp)
                         .animateItemPlacement()
