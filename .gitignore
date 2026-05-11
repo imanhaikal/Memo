@@ -1,16 +1,39 @@
+# Android Studio / IntelliJ
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
+/.idea/caches/
+/.idea/libraries/
 /.idea/modules.xml
 /.idea/workspace.xml
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+
+# Gradle / Android builds
+.gradle/
+.kotlin/
+/build/
+**/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+*.hprof
+
+# Local machine configuration
 local.properties
 .env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node / landing page artifacts
+node_modules/
+**/node_modules/
+landing page/.next/
+landing page/out/
+landing page/dist/
+landing page/.vercel/
+
+# Legacy/local agent tooling
+.kilocode/
