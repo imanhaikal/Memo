@@ -40,11 +40,13 @@ object CurrencyUtils {
         val normalized = input.trim()
         if (normalized.isEmpty()) return null
 
-        return normalized.toBigDecimalOrNull()
-            ?.takeIf { it > BigDecimal.ZERO }
-            ?.movePointRight(2)
-            ?.setScale(0, RoundingMode.HALF_UP)
-            ?.longValueExact()
+        return runCatching {
+            normalized.toBigDecimalOrNull()
+                ?.takeIf { it > BigDecimal.ZERO }
+                ?.movePointRight(2)
+                ?.setScale(0, RoundingMode.HALF_UP)
+                ?.longValueExact()
+        }.getOrNull()
     }
 
     fun formatAmountInput(amountCents: Long): String {

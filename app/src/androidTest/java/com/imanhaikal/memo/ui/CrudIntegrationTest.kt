@@ -10,6 +10,7 @@ import com.imanhaikal.memo.data.TransactionDao
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -44,6 +45,13 @@ class CrudIntegrationTest {
 
         // Wait for Dashboard to settle
         composeTestRule.onNodeWithText("Memo.").assertIsDisplayed()
+    }
+
+    @After
+    fun tearDown() {
+        runBlocking {
+            preferences.saveBudgetSettings(0L, System.currentTimeMillis(), 30)
+        }
     }
 
     @Test

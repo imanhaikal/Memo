@@ -72,10 +72,9 @@ class DaysRemainingTest {
 
     @Test
     fun `Test Start of Cycle - Days remaining should equal total days`() = runTest {
-        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
-
         val today = LocalDate.of(2023, 1, 1)
         setDate(today)
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
         setStartDate(today)
         totalDaysFlow.value = 30
 
@@ -85,11 +84,10 @@ class DaysRemainingTest {
 
     @Test
     fun `Test Middle of Cycle - Days remaining should be correct difference`() = runTest {
-        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
-
         val start = LocalDate.of(2023, 1, 1)
         val today = LocalDate.of(2023, 1, 16) // 15 days passed
         setDate(today)
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
         setStartDate(start)
         totalDaysFlow.value = 30
 
@@ -100,14 +98,13 @@ class DaysRemainingTest {
 
     @Test
     fun `Test End of Cycle - Last day should have 1 day remaining`() = runTest {
-        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
-
         val start = LocalDate.of(2023, 1, 1)
         val today = LocalDate.of(2023, 1, 30) // 29 days passed (if 1st is day 1, 30th is day 30)
         // ChronoUnit.DAYS.between(1st, 30th) = 29.
         // Remaining = 30 - 29 = 1.
         
         setDate(today)
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
         setStartDate(start)
         totalDaysFlow.value = 30
 
@@ -117,12 +114,11 @@ class DaysRemainingTest {
 
     @Test
     fun `Test Past Cycle - Should remain at 1 per current logic`() = runTest {
-        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
-
         val start = LocalDate.of(2023, 1, 1)
         val today = LocalDate.of(2023, 2, 5) // Way past 30 days
         
         setDate(today)
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
         setStartDate(start)
         totalDaysFlow.value = 30
 
@@ -133,8 +129,6 @@ class DaysRemainingTest {
 
     @Test
     fun `Test Leap Year - Should handle Feb 29 correctly`() = runTest {
-        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
-
         // Leap year 2024
         val start = LocalDate.of(2024, 2, 28)
         val today = LocalDate.of(2024, 3, 1) 
@@ -144,6 +138,7 @@ class DaysRemainingTest {
         // Days passed should be 2.
         
         setDate(today)
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
         setStartDate(start)
         totalDaysFlow.value = 30
 
@@ -162,8 +157,6 @@ class DaysRemainingTest {
     
     @Test
     fun `Test Non-Leap Year - Should handle Feb 28 to Mar 1 correctly`() = runTest {
-        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
-
         // Non-Leap year 2023
         val start = LocalDate.of(2023, 2, 28)
         val today = LocalDate.of(2023, 3, 1) 
@@ -172,6 +165,7 @@ class DaysRemainingTest {
         // Days passed should be 1.
         
         setDate(today)
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
         setStartDate(start)
         totalDaysFlow.value = 30
 

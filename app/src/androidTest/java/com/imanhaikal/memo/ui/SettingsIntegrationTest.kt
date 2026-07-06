@@ -21,11 +21,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import java.time.Clock
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 class SettingsIntegrationTest {
 
@@ -50,6 +51,13 @@ class SettingsIntegrationTest {
         runBlocking {
             // Setup a default budget so we land on Dashboard
             preferences.saveBudgetSettings(300_000L, System.currentTimeMillis(), 30)
+        }
+    }
+
+    @After
+    fun tearDown() {
+        runBlocking {
+            preferences.saveBudgetSettings(0L, System.currentTimeMillis(), 30)
         }
     }
 
@@ -165,14 +173,18 @@ class SettingsIntegrationTest {
 
     class FakeTransactionDao : TransactionDao {
         private val transactions = MutableStateFlow<List<Transaction>>(emptyList())
+        private val idCounter = AtomicInteger(0)
 
         override fun getAllTransactions(): Flow<List<Transaction>> = transactions
 
         override suspend fun insertTransaction(transaction: Transaction) {
             val current = transactions.value.toMutableList()
-            // remove existing with same id?
-            current.removeIf { it.id == transaction.id }
-            current.add(transaction)
+            if (transaction.id == 0) {
+                current.add(transaction.copy(id = idCounter.incrementAndGet()))
+            } else {
+                current.removeIf { it.id == transaction.id }
+                current.add(transaction)
+            }
             transactions.value = current
         }
 

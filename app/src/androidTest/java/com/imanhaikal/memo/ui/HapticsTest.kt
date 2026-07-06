@@ -15,6 +15,7 @@ import com.imanhaikal.memo.ui.components.TransactionItem
 import com.imanhaikal.memo.ui.dialogs.AddExpenseDialog
 import com.imanhaikal.memo.ui.dialogs.SetupDialog
 import com.imanhaikal.memo.ui.theme.MemoTheme
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -38,7 +39,7 @@ class HapticsTest {
         // Use useUnmergedTree = true because ExtendedFloatingActionButton merges its children
         composeTestRule.onNodeWithText("Add Expense", useUnmergedTree = true).performClick()
         
-        assert(clicked) { "FAB click should be registered" }
+        assertTrue("FAB click should be registered", clicked)
     }
 
     @Test

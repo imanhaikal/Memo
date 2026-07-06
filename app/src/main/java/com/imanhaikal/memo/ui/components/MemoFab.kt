@@ -13,7 +13,6 @@ import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -42,12 +41,6 @@ fun MemoFab(
         ),
         label = "fabScale"
     )
-
-    LaunchedEffect(isPressed) {
-        if (isPressed) {
-            haptic.performClick()
-        }
-    }
 
     ExtendedFloatingActionButton(
         onClick = {

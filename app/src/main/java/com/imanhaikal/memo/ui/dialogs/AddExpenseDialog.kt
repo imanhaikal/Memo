@@ -30,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,8 +58,9 @@ fun AddExpenseDialog(
     onDelete: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
-    var amountText by remember { mutableStateOf(transaction?.amount?.let(CurrencyUtils::formatAmountInput) ?: "") }
-    var noteText by remember { mutableStateOf(transaction?.note ?: "") }
+    var amountText by rememberSaveable(transaction?.id) { mutableStateOf(transaction?.amount?.let(CurrencyUtils::formatAmountInput) ?: "") }
+    var noteText by rememberSaveable(transaction?.id) { mutableStateOf(transaction?.note ?: "") }
+    val amountCents = CurrencyUtils.parseAmountToCents(amountText)
 
     val scale = remember { Animatable(0.9f) }
     val alpha = remember { Animatable(0f) }
@@ -111,7 +113,7 @@ fun AddExpenseDialog(
                     label = "Amount",
                     placeholder = "0.00",
                     keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number,
+                        keyboardType = KeyboardType.Decimal,
                         imeAction = ImeAction.Next
                     ),
                     modifier = Modifier.fillMaxWidth()
@@ -168,11 +170,11 @@ fun AddExpenseDialog(
                     Button(
                         onClick = {
                             haptic.performClick()
-                            val amountCents = CurrencyUtils.parseAmountToCents(amountText)
                             if (amountCents != null) {
                                 onConfirm(amountCents, noteText)
                             }
                         },
+                        enabled = amountCents != null,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = AppColors.Yellow,
                             contentColor = AppColors.TextPrimary

@@ -25,6 +25,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.imanhaikal.memo.ui.theme.AppColors
@@ -65,7 +67,10 @@ fun MemoInput(
             .let { if (value.isNotEmpty()) it else it } // No-op to keep chain clean if needed
             .background(backgroundColor, shape)
             .heightIn(min = 56.dp) // Standard touch target height
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 16.dp)
+            .semantics {
+                label?.let { contentDescription = it }
+            },
         textStyle = MaterialTheme.typography.bodyLarge.copy(
             color = AppColors.TextPrimary,
             textAlign = TextAlign.Start

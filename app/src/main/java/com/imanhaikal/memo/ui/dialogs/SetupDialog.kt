@@ -22,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,8 +46,11 @@ fun SetupDialog(
     onConfirm: (amountCents: Long, days: Int) -> Unit,
     onDismiss: () -> Unit // Although usually setup isn't dismissible without action, we'll include it for standard dialog API
 ) {
-    var amountText by remember { mutableStateOf("") }
-    var daysText by remember { mutableStateOf("30") }
+    var amountText by rememberSaveable { mutableStateOf("") }
+    var daysText by rememberSaveable { mutableStateOf("30") }
+    val amountCents = CurrencyUtils.parseAmountToCents(amountText)
+    val days = daysText.toIntOrNull()
+    val isValid = amountCents != null && days != null && days > 0
 
     val scale = remember { Animatable(0.9f) }
     val alpha = remember { Animatable(0f) }
@@ -106,7 +110,7 @@ fun SetupDialog(
                     onValueChange = { amountText = it },
                     label = "Total Budget",
                     placeholder = "e.g. 1000",
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -127,12 +131,13 @@ fun SetupDialog(
                 Button(
                     onClick = {
                         haptic.performClick()
-                        val amountCents = CurrencyUtils.parseAmountToCents(amountText)
-                        val days = daysText.toIntOrNull()
-                        if (amountCents != null && days != null && days > 0) {
-                            onConfirm(amountCents, days)
+                        val validAmountCents = amountCents
+                        val validDays = days
+                        if (validAmountCents != null && validDays != null && validDays > 0) {
+                            onConfirm(validAmountCents, validDays)
                         }
                     },
+                    enabled = isValid,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = AppColors.Yellow,
                         contentColor = AppColors.TextPrimary

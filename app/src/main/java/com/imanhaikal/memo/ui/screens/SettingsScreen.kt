@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -34,7 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,15 +55,16 @@ fun SettingsScreen(
     state: BudgetUiState,
     onBack: () -> Unit,
     onSave: (Long, Int, String) -> Unit,
-    onReset: () -> Unit
+    onReset: () -> Unit,
+    contentPadding: PaddingValues = PaddingValues(0.dp)
 ) {
-    var budgetInput by remember {
+    var budgetInput by rememberSaveable {
         mutableStateOf(CurrencyUtils.formatAmountInput(state.totalBudget))
     }
-    var daysInput by remember { mutableStateOf(state.totalDays.toString()) }
-    var selectedCurrency by remember { mutableStateOf(state.currencyCode) }
-    var showCurrencyDropdown by remember { mutableStateOf(false) }
-    var showResetDialog by remember { mutableStateOf(false) }
+    var daysInput by rememberSaveable { mutableStateOf(state.totalDays.toString()) }
+    var selectedCurrency by rememberSaveable { mutableStateOf(state.currencyCode) }
+    var showCurrencyDropdown by rememberSaveable { mutableStateOf(false) }
+    var showResetDialog by rememberSaveable { mutableStateOf(false) }
 
     // Update inputs when state changes (e.g. initial load)
     LaunchedEffect(state) {
@@ -89,7 +92,9 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .padding(contentPadding)
             .statusBarsPadding()
+            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
@@ -191,7 +196,7 @@ fun SettingsScreen(
                         }
                     },
                     placeholder = "0.00",
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
             }
 
@@ -217,8 +222,10 @@ fun SettingsScreen(
 
             Button(
                 onClick = {
-                    if (isValid) {
-                        onSave(currentBudgetCents!!, currentDays!!, selectedCurrency)
+                    val validBudgetCents = currentBudgetCents
+                    val validDays = currentDays
+                    if (validBudgetCents != null && validDays != null && validDays > 0) {
+                        onSave(validBudgetCents, validDays, selectedCurrency)
                         onBack() // Go back after saving
                     }
                 },

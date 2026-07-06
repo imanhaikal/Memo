@@ -18,7 +18,7 @@ class BudgetCalculatorUseCase(private val clock: Clock) {
         currencyCode: String
     ): BudgetUiState {
         // Basic Setup Check
-        val isSetup = totalBudgetCents > 0 && totalDays > 0
+        val isSetup = totalBudgetCents > 0 && totalDays > 0 && cycleStartDateMillis > 0
         if (!isSetup) {
             return BudgetUiState(
                 isLoading = false,
@@ -32,6 +32,11 @@ class BudgetCalculatorUseCase(private val clock: Clock) {
         // Time calculations using Clock
         val todayDate = clock.instant().atZone(clock.zone).toLocalDate()
         val startDate = Instant.ofEpochMilli(cycleStartDateMillis).atZone(clock.zone).toLocalDate()
+        val endDateExclusive = startDate.plusDays(totalDays.toLong())
+        val activeTransactions = transactions.filter {
+            val txDate = Instant.ofEpochMilli(it.date).atZone(clock.zone).toLocalDate()
+            !txDate.isBefore(startDate) && txDate.isBefore(endDateExclusive)
+        }
 
         // Days Passed & Remaining
         val daysPassed = ChronoUnit.DAYS.between(startDate, todayDate).toInt()
@@ -39,13 +44,13 @@ class BudgetCalculatorUseCase(private val clock: Clock) {
 
         // Strict Daily Pool Logic
         // Spent before today
-        val spentBeforeToday = transactions.filter {
+        val spentBeforeToday = activeTransactions.filter {
             val txDate = Instant.ofEpochMilli(it.date).atZone(clock.zone).toLocalDate()
             txDate.isBefore(todayDate)
         }.sumOf { it.amount }
 
         // Spent today
-        val spentToday = transactions.filter {
+        val spentToday = activeTransactions.filter {
             val txDate = Instant.ofEpochMilli(it.date).atZone(clock.zone).toLocalDate()
             txDate.isEqual(todayDate)
         }.sumOf { it.amount }

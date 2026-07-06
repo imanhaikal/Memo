@@ -49,7 +49,7 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun MemoTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = false,
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = false, // Disabled by default for brand consistency
     content: @Composable () -> Unit
@@ -67,8 +67,7 @@ fun MemoTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            // Status bar transparency handled by Edge-to-Edge in MainActivity
-            // Here we just ensure the contrast
+            // The current brand system is intentionally light-only; keep system bar icons aligned.
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }

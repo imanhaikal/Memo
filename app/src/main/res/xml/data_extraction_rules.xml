@@ -1,15 +1,15 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
--->
+<?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
+        <exclude domain="database" path="memo_database" />
+        <exclude domain="database" path="memo_database-shm" />
+        <exclude domain="database" path="memo_database-wal" />
+        <exclude domain="file" path="datastore/budget_preferences.preferences_pb" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="database" path="memo_database" />
+        <exclude domain="database" path="memo_database-shm" />
+        <exclude domain="database" path="memo_database-wal" />
+        <exclude domain="file" path="datastore/budget_preferences.preferences_pb" />
     </device-transfer>
-    -->
 </data-extraction-rules>

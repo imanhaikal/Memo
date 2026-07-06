@@ -13,6 +13,7 @@ import com.imanhaikal.memo.ui.components.MemoFab
 import com.imanhaikal.memo.ui.components.MemoInput
 import com.imanhaikal.memo.ui.components.TransactionItem
 import com.imanhaikal.memo.ui.theme.MemoTheme
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -42,7 +43,7 @@ class Phase5PolishTest {
         // Verify Click (Triggers Haptics + Animation internally)
         composeTestRule.onNodeWithText("Add Expense", useUnmergedTree = true).performClick()
         
-        assert(clicked) { "FAB onClick should be triggered" }
+        assertTrue("FAB onClick should be triggered", clicked)
     }
 
     @Test

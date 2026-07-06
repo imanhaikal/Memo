@@ -33,6 +33,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.ui.theme.AppColors
@@ -124,6 +127,14 @@ fun TransactionItem(
                     .clickable {
                         haptic.performClick()
                         onClick()
+                    }
+                    .semantics {
+                        customActions = listOf(
+                            CustomAccessibilityAction("Delete") {
+                                currentOnDelete()
+                                true
+                            }
+                        )
                     }
                     .background(AppColors.Surface)
                     .border(
