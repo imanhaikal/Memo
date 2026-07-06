@@ -37,3 +37,4 @@ landing page/.vercel/
 
 # Legacy/local agent tooling
 .kilocode/
+.kilo/

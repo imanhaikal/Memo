@@ -57,12 +57,12 @@ class MainViewModelSettingsTest {
         val newDays = 15
 
         // Act
-        viewModel.updateBudget(newBudget, newDays)
+        viewModel.updateBudget(newBudget, newDays, "USD")
         testDispatcher.scheduler.advanceUntilIdle()
 
         // Assert
         coVerify(exactly = 1) { 
-            budgetPreferences.updateBudgetConfig(newBudget, newDays) 
+            budgetPreferences.updateBudgetConfig(newBudget, newDays, "USD") 
         }
     }
 
@@ -73,18 +73,18 @@ class MainViewModelSettingsTest {
         val newDays = 15
 
         // Act
-        viewModel.updateBudget(newBudget, newDays)
+        viewModel.updateBudget(newBudget, newDays, "USD")
         testDispatcher.scheduler.advanceUntilIdle()
 
         // Assert
         // Verify updateBudgetConfig IS called
         coVerify(exactly = 1) { 
-            budgetPreferences.updateBudgetConfig(newBudget, newDays) 
+            budgetPreferences.updateBudgetConfig(newBudget, newDays, "USD") 
         }
 
         // Verify saveBudgetSettings (which sets start date) is NOT called
         coVerify(exactly = 0) {
-            budgetPreferences.saveBudgetSettings(any(), any(), any())
+            budgetPreferences.saveBudgetSettings(any(), any(), any(), any())
         }
 
         // Verify deleteAllTransactions is NOT called

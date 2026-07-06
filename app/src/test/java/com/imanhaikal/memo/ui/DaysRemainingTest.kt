@@ -34,6 +34,7 @@ class DaysRemainingTest {
     private val totalBudgetFlow = MutableStateFlow(1000.0)
     private val cycleStartDateFlow = MutableStateFlow(0L)
     private val totalDaysFlow = MutableStateFlow(30)
+    private val currencyFlow = MutableStateFlow("USD")
 
     @Before
     fun setup() {
@@ -45,6 +46,7 @@ class DaysRemainingTest {
         every { budgetPreferences.totalBudget } returns totalBudgetFlow
         every { budgetPreferences.cycleStartDate } returns cycleStartDateFlow
         every { budgetPreferences.totalDays } returns totalDaysFlow
+        every { budgetPreferences.currency } returns currencyFlow
 
         viewModel = MainViewModel(transactionDao, budgetPreferences)
     }
