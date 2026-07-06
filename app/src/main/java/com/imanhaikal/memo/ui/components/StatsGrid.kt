@@ -14,12 +14,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.imanhaikal.memo.ui.theme.AppColors
-import java.text.NumberFormat
-import java.util.Locale
 
 @Composable
 fun StatsGrid(
-    dailyLimit: Double,
+    dailyLimit: Long,
     daysRemaining: Int,
     modifier: Modifier = Modifier,
     currencyCode: String = "USD"

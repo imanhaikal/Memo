@@ -52,14 +52,11 @@ import com.imanhaikal.memo.utils.CurrencyUtils
 fun SettingsScreen(
     state: BudgetUiState,
     onBack: () -> Unit,
-    onSave: (Double, Int, String) -> Unit,
+    onSave: (Long, Int, String) -> Unit,
     onReset: () -> Unit
 ) {
     var budgetInput by remember {
-        mutableStateOf(
-            if (state.totalBudget % 1.0 == 0.0) state.totalBudget.toInt().toString()
-            else state.totalBudget.toString()
-        )
+        mutableStateOf(CurrencyUtils.formatAmountInput(state.totalBudget))
     }
     var daysInput by remember { mutableStateOf(state.totalDays.toString()) }
     var selectedCurrency by remember { mutableStateOf(state.currencyCode) }
@@ -72,7 +69,7 @@ fun SettingsScreen(
         // But if user is typing, we shouldn't overwrite.
         // For simplicity, we assume state is stable while editing.
         // To prevent overwriting while typing, we can just initialize once or check simple equality
-        if (budgetInput.toDoubleOrNull() == state.totalBudget && daysInput.toIntOrNull() == state.totalDays) {
+        if (CurrencyUtils.parseAmountToCents(budgetInput) == state.totalBudget && daysInput.toIntOrNull() == state.totalDays) {
             // Already synced or initial state
         } else {
              // If state changes externally, we might want to update, but usually this is just initial.
@@ -81,13 +78,13 @@ fun SettingsScreen(
     
     // We'll initialize with state values.
     // Ideally we want to detect changes to enable the save button.
-    val currentBudget = budgetInput.toDoubleOrNull()
+    val currentBudgetCents = CurrencyUtils.parseAmountToCents(budgetInput)
     val currentDays = daysInput.toIntOrNull()
     
-    val hasChanges = (currentBudget != null && currentBudget != state.totalBudget) ||
-                     (currentDays != null && currentDays != state.totalDays) ||
-                     (selectedCurrency != state.currencyCode)
-    val isValid = currentBudget != null && currentBudget > 0 && currentDays != null && currentDays > 0
+    val hasChanges = (currentBudgetCents != null && currentBudgetCents != state.totalBudget) ||
+                      (currentDays != null && currentDays != state.totalDays) ||
+                      (selectedCurrency != state.currencyCode)
+    val isValid = currentBudgetCents != null && currentDays != null && currentDays > 0
 
     Column(
         modifier = Modifier
@@ -221,7 +218,7 @@ fun SettingsScreen(
             Button(
                 onClick = {
                     if (isValid) {
-                        onSave(currentBudget!!, currentDays!!, selectedCurrency)
+                        onSave(currentBudgetCents!!, currentDays!!, selectedCurrency)
                         onBack() // Go back after saving
                     }
                 },

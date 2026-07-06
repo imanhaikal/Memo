@@ -45,7 +45,7 @@ class HapticsTest {
     fun testTransactionItemTriggerHaptics() {
         val transaction = Transaction(
             id = 1,
-            amount = 50.0,
+            amount = 5_000L,
             note = "Test Expense",
             date = System.currentTimeMillis()
         )
@@ -101,7 +101,7 @@ class HapticsTest {
 
     @Test
     fun testRollingCurrencyHaptics() {
-        val valueState = mutableStateOf(10.0)
+        val valueState = mutableStateOf(1_000L)
 
         composeTestRule.setContent {
             MemoTheme {
@@ -117,7 +117,7 @@ class HapticsTest {
         composeTestRule.onNodeWithText("$10.00").assertIsDisplayed()
 
         // Trigger animation
-        valueState.value = 20.0
+        valueState.value = 2_000L
 
         // Allow animation to proceed
         composeTestRule.mainClock.advanceTimeBy(2000)

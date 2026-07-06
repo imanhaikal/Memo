@@ -21,7 +21,7 @@ import com.imanhaikal.memo.ui.theme.AppColors
 
 @Composable
 fun HeroSection(
-    availableAmount: Double,
+    availableAmount: Long,
     status: BudgetStatus,
     modifier: Modifier = Modifier,
     currencyCode: String = "USD"

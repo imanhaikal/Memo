@@ -120,7 +120,7 @@ fun DashboardScreen(
             }
 
             items(
-                items = state.transactions.sortedByDescending { it.date },
+                items = state.transactions,
                 key = { it.id }
             ) { transaction ->
                 // List items slide in individually

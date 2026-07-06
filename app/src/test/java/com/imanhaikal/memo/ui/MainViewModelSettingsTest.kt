@@ -2,7 +2,6 @@ package com.imanhaikal.memo.ui
 
 import com.imanhaikal.memo.data.BudgetPreferences
 import com.imanhaikal.memo.data.TransactionDao
-import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -16,6 +15,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import java.time.Clock
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModelSettingsTest {
@@ -27,9 +27,10 @@ class MainViewModelSettingsTest {
 
     // Mock data flows
     private val transactionsFlow = MutableStateFlow(emptyList<com.imanhaikal.memo.data.Transaction>())
-    private val totalBudgetFlow = MutableStateFlow(0.0)
+    private val totalBudgetFlow = MutableStateFlow(0L)
     private val cycleStartDateFlow = MutableStateFlow(0L)
     private val totalDaysFlow = MutableStateFlow(30)
+    private val currencyFlow = MutableStateFlow("USD")
 
     @Before
     fun setup() {
@@ -41,8 +42,9 @@ class MainViewModelSettingsTest {
         every { budgetPreferences.totalBudget } returns totalBudgetFlow
         every { budgetPreferences.cycleStartDate } returns cycleStartDateFlow
         every { budgetPreferences.totalDays } returns totalDaysFlow
+        every { budgetPreferences.currency } returns currencyFlow
 
-        viewModel = MainViewModel(transactionDao, budgetPreferences)
+        viewModel = MainViewModel(transactionDao, budgetPreferences, Clock.systemDefaultZone())
     }
 
     @After
@@ -53,7 +55,7 @@ class MainViewModelSettingsTest {
     @Test
     fun `updateBudget updates budget and days`() = runTest {
         // Arrange
-        val newBudget = 5000.0
+        val newBudget = 500_000L
         val newDays = 15
 
         // Act
@@ -69,7 +71,7 @@ class MainViewModelSettingsTest {
     @Test
     fun `updateBudget does NOT reset start date or clear transactions`() = runTest {
         // Arrange
-        val newBudget = 5000.0
+        val newBudget = 500_000L
         val newDays = 15
 
         // Act

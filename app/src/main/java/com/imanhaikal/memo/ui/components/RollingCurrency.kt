@@ -18,7 +18,7 @@ import com.imanhaikal.memo.utils.CurrencyUtils
 
 @Composable
 fun RollingCurrency(
-    value: Double,
+    value: Long,
     style: TextStyle,
     color: Color,
     modifier: Modifier = Modifier,
@@ -39,7 +39,7 @@ fun RollingCurrency(
     }
 
     LaunchedEffect(animatedValue) {
-        snapshotFlow { animatedValue.value.toInt() }
+        snapshotFlow { (animatedValue.value / 100).toInt() }
             .drop(1)
             .collect {
                 strongHaptics.performClick()
@@ -47,7 +47,7 @@ fun RollingCurrency(
     }
 
     Text(
-        text = CurrencyUtils.formatCurrency(animatedValue.value.toDouble(), currencyCode),
+        text = CurrencyUtils.formatCurrency(animatedValue.value.toLong(), currencyCode),
         style = style,
         color = color,
         modifier = modifier

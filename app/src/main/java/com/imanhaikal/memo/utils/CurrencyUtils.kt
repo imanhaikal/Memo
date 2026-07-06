@@ -2,6 +2,8 @@ package com.imanhaikal.memo.utils
 
 import java.text.DecimalFormat
 import java.text.NumberFormat
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.util.Currency
 import java.util.Locale
 
@@ -15,7 +17,7 @@ object CurrencyUtils {
         "JPY" to "¥ (JPY)"
     )
 
-    fun formatCurrency(amount: Double, code: String): String {
+    fun formatCurrency(amountCents: Long, code: String): String {
         val format = NumberFormat.getCurrencyInstance(Locale.US)
         try {
             val currency = Currency.getInstance(code)
@@ -31,6 +33,23 @@ object CurrencyUtils {
             // Fallback to USD/Default if code is invalid
         }
         
-        return format.format(amount)
+        return format.format(amountCents / 100.0)
+    }
+
+    fun parseAmountToCents(input: String): Long? {
+        val normalized = input.trim()
+        if (normalized.isEmpty()) return null
+
+        return normalized.toBigDecimalOrNull()
+            ?.takeIf { it > BigDecimal.ZERO }
+            ?.movePointRight(2)
+            ?.setScale(0, RoundingMode.HALF_UP)
+            ?.longValueExact()
+    }
+
+    fun formatAmountInput(amountCents: Long): String {
+        val units = amountCents / 100
+        val cents = kotlin.math.abs(amountCents % 100)
+        return if (cents == 0L) units.toString() else "$units.${cents.toString().padStart(2, '0')}"
     }
 }

@@ -75,7 +75,7 @@ class Phase5PolishTest {
     fun testTransactionItemInteraction() {
         val sampleTransaction = Transaction(
             id = 1,
-            amount = 12.50,
+            amount = 1_250L,
             note = "Coffee",
             date = System.currentTimeMillis()
         )

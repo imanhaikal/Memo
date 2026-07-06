@@ -17,9 +17,9 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
+import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
-import java.time.temporal.ChronoUnit
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModelTest {
@@ -31,10 +31,13 @@ class MainViewModelTest {
 
     // Mock data flows
     private val transactionsFlow = MutableStateFlow<List<Transaction>>(emptyList())
-    private val totalBudgetFlow = MutableStateFlow(0.0)
+    private val totalBudgetFlow = MutableStateFlow(0L)
     private val cycleStartDateFlow = MutableStateFlow(0L)
     private val totalDaysFlow = MutableStateFlow(30)
     private val currencyFlow = MutableStateFlow("USD")
+    private val zoneId = ZoneId.systemDefault()
+    private val now = Instant.parse("2024-01-15T12:00:00Z")
+    private lateinit var clock: Clock
 
     @Before
     fun setup() {
@@ -48,7 +51,8 @@ class MainViewModelTest {
         every { budgetPreferences.totalDays } returns totalDaysFlow
         every { budgetPreferences.currency } returns currencyFlow
 
-        viewModel = MainViewModel(transactionDao, budgetPreferences)
+        clock = Clock.fixed(now, zoneId)
+        viewModel = MainViewModel(transactionDao, budgetPreferences, clock)
     }
 
     @After
@@ -64,11 +68,10 @@ class MainViewModelTest {
         }
 
         // Setup: Budget 3000, 30 days, Start Date is NOW
-        val now = System.currentTimeMillis()
-        viewModel.setSystemTimeOverride(now)
-        
-        totalBudgetFlow.value = 3000.0
-        cycleStartDateFlow.value = now
+        val nowMillis = now.toEpochMilli()
+
+        totalBudgetFlow.value = 300_000L
+        cycleStartDateFlow.value = nowMillis
         totalDaysFlow.value = 30
         transactionsFlow.value = emptyList()
         
@@ -76,14 +79,14 @@ class MainViewModelTest {
         val state = viewModel.uiState.value
 
         // Ensure setup is complete
-        assertEquals("Total Budget", 3000.0, state.totalBudget, 0.01)
+        assertEquals("Total Budget", 300_000L, state.totalBudget)
         // Days remaining starts at totalDays if daysPassed is 0.
         // logic: daysPassed = between(startDate, today)
         // startDate = now, today = now -> daysPassed = 0
         // daysRemaining = max(1, 30 - 0) = 30
         assertEquals(30, state.daysRemaining)
-        assertEquals(100.0, state.dailyLimit, 0.01) // 3000 / 30 = 100
-        assertEquals(100.0, state.availableToday, 0.01) // 100 - 0 = 100
+        assertEquals(10_000L, state.dailyLimit) // 3000 / 30 = 100
+        assertEquals(10_000L, state.availableToday) // 100 - 0 = 100
         assertEquals(BudgetStatus.ON_TRACK, state.status)
     }
 
@@ -94,33 +97,30 @@ class MainViewModelTest {
         }
 
         // Setup: Budget 3000, 30 days
-        val now = System.currentTimeMillis()
-        viewModel.setSystemTimeOverride(now)
+        val nowMillis = now.toEpochMilli()
 
-        totalBudgetFlow.value = 3000.0
-        cycleStartDateFlow.value = now
+        totalBudgetFlow.value = 300_000L
+        cycleStartDateFlow.value = nowMillis
         totalDaysFlow.value = 30
         
         // Add a transaction of 50 today
         transactionsFlow.value = listOf(
-            Transaction(id = 1, amount = 50.0, note = "Food", date = now)
+            Transaction(id = 1, amount = 5_000L, note = "Food", date = nowMillis)
         )
 
         testDispatcher.scheduler.advanceUntilIdle()
         val state = viewModel.uiState.value
 
-        // Calculation (Continuous Amortization):
-        // Total Budget = 3000
-        // Spent Total = 50
-        // Current Pool = 3000 - 50 = 2950
+        // Calculation (Strict Daily Pool):
+        // Pool = 3000 - 0 spent before today = 3000
         // Days Remaining = 30
-        // Daily Limit = 2950 / 30 = 98.333...
+        // Daily Limit = 3000 / 30 = 100
         // Spent Today = 50
-        // Available Today = 98.333... - 50 = 48.333...
+        // Available Today = 100 - 50 = 50
         
-        assertEquals(50.0, state.spentToday, 0.01)
-        assertEquals(98.33, state.dailyLimit, 0.01)
-        assertEquals(48.33, state.availableToday, 0.01)
+        assertEquals(5_000L, state.spentToday)
+        assertEquals(10_000L, state.dailyLimit)
+        assertEquals(5_000L, state.availableToday)
         assertEquals(BudgetStatus.ON_TRACK, state.status)
     }
 
@@ -133,8 +133,6 @@ class MainViewModelTest {
         // Setup: Budget 3000, 30 days
         // Start date was yesterday
         // We need to ensure we are using system default zone for LocalDate conversion inside ViewModel
-        val zoneId = ZoneId.systemDefault()
-        val now = Instant.now()
         val todayDate = now.atZone(zoneId).toLocalDate()
         val yesterdayDate = todayDate.minusDays(1)
         
@@ -142,9 +140,7 @@ class MainViewModelTest {
         val todayMillis = now.toEpochMilli()
         val startOfYesterdayMillis = yesterdayDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
 
-        viewModel.setSystemTimeOverride(todayMillis)
-
-        totalBudgetFlow.value = 3000.0
+        totalBudgetFlow.value = 300_000L
         cycleStartDateFlow.value = startOfYesterdayMillis // Started yesterday
         totalDaysFlow.value = 30
         
@@ -161,8 +157,8 @@ class MainViewModelTest {
         // Available Today = 103.448 - 0 = 103.448
 
         assertEquals(29, state.daysRemaining)
-        assertEquals(103.45, state.dailyLimit, 0.1)
-        assertEquals(103.45, state.availableToday, 0.1)
+        assertEquals(10_344L, state.dailyLimit)
+        assertEquals(10_344L, state.availableToday)
     }
 
     @Test
@@ -172,30 +168,29 @@ class MainViewModelTest {
         }
 
         // Setup: Budget 3000, 30 days
-        val now = System.currentTimeMillis()
-        viewModel.setSystemTimeOverride(now)
+        val nowMillis = now.toEpochMilli()
         
-        totalBudgetFlow.value = 3000.0
-        cycleStartDateFlow.value = now
+        totalBudgetFlow.value = 300_000L
+        cycleStartDateFlow.value = nowMillis
         totalDaysFlow.value = 30
         
         // 1. Over Limit
         // Daily limit is 100. If we spend 101, available is -1.
-        transactionsFlow.value = listOf(Transaction(amount = 101.0, note = "Big Spend", date = now))
+        transactionsFlow.value = listOf(Transaction(amount = 10_100L, note = "Big Spend", date = nowMillis))
         testDispatcher.scheduler.advanceUntilIdle()
         var state = viewModel.uiState.value
         assertEquals("Available: ${state.availableToday}", BudgetStatus.OVER_LIMIT, state.status)
 
         // 2. Careful
         // Daily limit 100. careful if available < 20% (20). So spend 81 -> available 19.
-        transactionsFlow.value = listOf(Transaction(amount = 81.0, note = "Careful Spend", date = now))
+        transactionsFlow.value = listOf(Transaction(amount = 8_100L, note = "Careful Spend", date = nowMillis))
         testDispatcher.scheduler.advanceUntilIdle()
         state = viewModel.uiState.value
         assertEquals("Available: ${state.availableToday}", BudgetStatus.CAREFUL, state.status)
 
         // 3. On Track
         // Spend 50 -> available 50 (> 20)
-        transactionsFlow.value = listOf(Transaction(amount = 50.0, note = "Normal Spend", date = now))
+        transactionsFlow.value = listOf(Transaction(amount = 5_000L, note = "Normal Spend", date = nowMillis))
         testDispatcher.scheduler.advanceUntilIdle()
         state = viewModel.uiState.value
         assertEquals("Available: ${state.availableToday}", BudgetStatus.ON_TRACK, state.status)

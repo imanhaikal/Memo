@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
 data class Transaction(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
-    val amount: Double,
+    val amount: Long, // Stored in cents
     val note: String,
     val date: Long // Epoch millis
 )

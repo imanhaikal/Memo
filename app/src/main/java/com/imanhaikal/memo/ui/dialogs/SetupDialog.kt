@@ -37,11 +37,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.imanhaikal.memo.ui.theme.AppColors
 import com.imanhaikal.memo.ui.theme.MemoTheme
+import com.imanhaikal.memo.utils.CurrencyUtils
 import kotlinx.coroutines.launch
 
 @Composable
 fun SetupDialog(
-    onConfirm: (amount: Double, days: Int) -> Unit,
+    onConfirm: (amountCents: Long, days: Int) -> Unit,
     onDismiss: () -> Unit // Although usually setup isn't dismissible without action, we'll include it for standard dialog API
 ) {
     var amountText by remember { mutableStateOf("") }
@@ -126,10 +127,10 @@ fun SetupDialog(
                 Button(
                     onClick = {
                         haptic.performClick()
-                        val amount = amountText.toDoubleOrNull()
+                        val amountCents = CurrencyUtils.parseAmountToCents(amountText)
                         val days = daysText.toIntOrNull()
-                        if (amount != null && amount > 0 && days != null && days > 0) {
-                            onConfirm(amount, days)
+                        if (amountCents != null && days != null && days > 0) {
+                            onConfirm(amountCents, days)
                         }
                     },
                     colors = ButtonDefaults.buttonColors(

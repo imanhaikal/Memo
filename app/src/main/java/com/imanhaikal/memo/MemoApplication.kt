@@ -4,6 +4,7 @@ import android.app.Application
 import com.imanhaikal.memo.data.AppDatabase
 import com.imanhaikal.memo.data.BudgetPreferences
 import com.imanhaikal.memo.data.TransactionDao
+import java.time.Clock
 
 class MemoApplication : Application() {
 
@@ -19,6 +20,7 @@ class MemoApplication : Application() {
 interface AppContainer {
     val transactionDao: TransactionDao
     val budgetPreferences: BudgetPreferences
+    val clock: Clock
 }
 
 class DefaultAppContainer(private val context: Application) : AppContainer {
@@ -28,5 +30,9 @@ class DefaultAppContainer(private val context: Application) : AppContainer {
 
     override val budgetPreferences: BudgetPreferences by lazy {
         BudgetPreferences(context)
+    }
+    
+    override val clock: Clock by lazy {
+        Clock.systemDefaultZone()
     }
 }

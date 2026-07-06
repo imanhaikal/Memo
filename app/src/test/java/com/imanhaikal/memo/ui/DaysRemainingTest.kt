@@ -17,9 +17,9 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
+import java.time.Clock
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.ZoneOffset
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DaysRemainingTest {
@@ -31,10 +31,11 @@ class DaysRemainingTest {
 
     // Mock data flows
     private val transactionsFlow = MutableStateFlow<List<Transaction>>(emptyList())
-    private val totalBudgetFlow = MutableStateFlow(1000.0)
+    private val totalBudgetFlow = MutableStateFlow(100_000L)
     private val cycleStartDateFlow = MutableStateFlow(0L)
     private val totalDaysFlow = MutableStateFlow(30)
     private val currencyFlow = MutableStateFlow("USD")
+    private val zoneId = ZoneId.systemDefault()
 
     @Before
     fun setup() {
@@ -48,7 +49,7 @@ class DaysRemainingTest {
         every { budgetPreferences.totalDays } returns totalDaysFlow
         every { budgetPreferences.currency } returns currencyFlow
 
-        viewModel = MainViewModel(transactionDao, budgetPreferences)
+        viewModel = MainViewModel(transactionDao, budgetPreferences, Clock.systemDefaultZone())
     }
 
     @After
@@ -57,13 +58,14 @@ class DaysRemainingTest {
     }
 
     private fun setDate(date: LocalDate) {
-        val zoneId = ZoneId.systemDefault()
-        val time = date.atStartOfDay(zoneId).toInstant().toEpochMilli()
-        viewModel.setSystemTimeOverride(time)
+        viewModel = MainViewModel(
+            transactionDao = transactionDao,
+            budgetPreferences = budgetPreferences,
+            clock = Clock.fixed(date.atStartOfDay(zoneId).toInstant(), zoneId)
+        )
     }
 
     private fun setStartDate(date: LocalDate) {
-        val zoneId = ZoneId.systemDefault()
         val time = date.atStartOfDay(zoneId).toInstant().toEpochMilli()
         cycleStartDateFlow.value = time
     }

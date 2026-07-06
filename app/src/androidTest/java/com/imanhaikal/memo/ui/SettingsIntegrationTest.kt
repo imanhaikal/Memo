@@ -24,6 +24,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import java.time.Clock
 import java.util.concurrent.atomic.AtomicBoolean
 
 class SettingsIntegrationTest {
@@ -41,14 +42,14 @@ class SettingsIntegrationTest {
         context = InstrumentationRegistry.getInstrumentation().targetContext
         preferences = BudgetPreferences(context)
         transactionDao = FakeTransactionDao()
-        viewModel = MainViewModel(transactionDao, preferences)
+        viewModel = MainViewModel(transactionDao, preferences, Clock.systemDefaultZone())
 
         // Reset preferences to a known state (Setup Complete) for testing navigation
         // or Not Setup for testing Reset?
         // The test cases assume we start at Dashboard, so we need to be SETUP.
         runBlocking {
             // Setup a default budget so we land on Dashboard
-            preferences.saveBudgetSettings(3000.0, System.currentTimeMillis(), 30)
+            preferences.saveBudgetSettings(300_000L, System.currentTimeMillis(), 30)
         }
     }
 

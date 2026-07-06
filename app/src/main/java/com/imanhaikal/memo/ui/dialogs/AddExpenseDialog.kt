@@ -47,16 +47,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.imanhaikal.memo.ui.theme.AppColors
 import com.imanhaikal.memo.ui.theme.MemoTheme
+import com.imanhaikal.memo.utils.CurrencyUtils
 import kotlinx.coroutines.launch
 
 @Composable
 fun AddExpenseDialog(
     transaction: Transaction? = null,
-    onConfirm: (amount: Double, note: String) -> Unit,
+    onConfirm: (amountCents: Long, note: String) -> Unit,
     onDelete: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
-    var amountText by remember { mutableStateOf(transaction?.amount?.toString() ?: "") }
+    var amountText by remember { mutableStateOf(transaction?.amount?.let(CurrencyUtils::formatAmountInput) ?: "") }
     var noteText by remember { mutableStateOf(transaction?.note ?: "") }
 
     val scale = remember { Animatable(0.9f) }
@@ -167,9 +168,9 @@ fun AddExpenseDialog(
                     Button(
                         onClick = {
                             haptic.performClick()
-                            val amount = amountText.toDoubleOrNull()
-                            if (amount != null && amount > 0) {
-                                onConfirm(amount, noteText)
+                            val amountCents = CurrencyUtils.parseAmountToCents(amountText)
+                            if (amountCents != null) {
+                                onConfirm(amountCents, noteText)
                             }
                         },
                         colors = ButtonDefaults.buttonColors(

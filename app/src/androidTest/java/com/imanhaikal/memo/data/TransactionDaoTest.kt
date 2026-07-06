@@ -37,18 +37,18 @@ class TransactionDaoTest {
 
     @Test
     fun insertAndRetrieveTransaction() = runBlocking {
-        val transaction = Transaction(amount = 100.0, note = "Test", date = System.currentTimeMillis())
+        val transaction = Transaction(amount = 10_000L, note = "Test", date = System.currentTimeMillis())
         transactionDao.insertTransaction(transaction)
         
         val transactions = transactionDao.getAllTransactions().first()
         assertEquals(1, transactions.size)
-        assertEquals(100.0, transactions[0].amount, 0.0)
+        assertEquals(10_000L, transactions[0].amount)
         assertEquals("Test", transactions[0].note)
     }
 
     @Test
     fun deleteTransaction() = runBlocking {
-        val transaction = Transaction(id = 1, amount = 100.0, note = "Test", date = System.currentTimeMillis())
+        val transaction = Transaction(id = 1, amount = 10_000L, note = "Test", date = System.currentTimeMillis())
         transactionDao.insertTransaction(transaction)
         
         var transactions = transactionDao.getAllTransactions().first()
@@ -72,9 +72,9 @@ class TransactionDaoTest {
         val older = now - 10000
         val newer = now + 10000
         
-        val t1 = Transaction(amount = 10.0, note = "Older", date = older)
-        val t2 = Transaction(amount = 20.0, note = "Newer", date = newer)
-        val t3 = Transaction(amount = 30.0, note = "Now", date = now)
+        val t1 = Transaction(amount = 1_000L, note = "Older", date = older)
+        val t2 = Transaction(amount = 2_000L, note = "Newer", date = newer)
+        val t3 = Transaction(amount = 3_000L, note = "Now", date = now)
 
         transactionDao.insertTransaction(t1)
         transactionDao.insertTransaction(t2)

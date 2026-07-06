@@ -17,6 +17,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
+import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
 
@@ -30,10 +31,13 @@ class ContinuousAmortizationTest {
 
     // Mock data flows
     private val transactionsFlow = MutableStateFlow<List<Transaction>>(emptyList())
-    private val totalBudgetFlow = MutableStateFlow(0.0)
+    private val totalBudgetFlow = MutableStateFlow(0L)
     private val cycleStartDateFlow = MutableStateFlow(0L)
     private val totalDaysFlow = MutableStateFlow(30)
     private val currencyFlow = MutableStateFlow("USD")
+    private val zoneId = ZoneId.systemDefault()
+    private val now = Instant.parse("2024-01-15T12:00:00Z")
+    private lateinit var clock: Clock
 
     @Before
     fun setup() {
@@ -47,7 +51,8 @@ class ContinuousAmortizationTest {
         every { budgetPreferences.totalDays } returns totalDaysFlow
         every { budgetPreferences.currency } returns currencyFlow
 
-        viewModel = MainViewModel(transactionDao, budgetPreferences)
+        clock = Clock.fixed(now, zoneId)
+        viewModel = MainViewModel(transactionDao, budgetPreferences, clock)
     }
 
     @After
@@ -56,17 +61,16 @@ class ContinuousAmortizationTest {
     }
 
     @Test
-    fun `Scenario 1 Intra-day Update - Spending TODAY reduces the dailyLimit immediately`() = runTest {
+    fun `Scenario 1 Strict Daily Pool - Spending TODAY does not reduce the dailyLimit`() = runTest {
         backgroundScope.launch(testDispatcher) {
             viewModel.uiState.collect {}
         }
 
         // Setup: TotalBudget = 1000, Days = 10, StartDate = Today
-        val now = System.currentTimeMillis()
-        viewModel.setSystemTimeOverride(now)
+        val nowMillis = now.toEpochMilli()
 
-        totalBudgetFlow.value = 1000.0
-        cycleStartDateFlow.value = now
+        totalBudgetFlow.value = 100_000L
+        cycleStartDateFlow.value = nowMillis
         totalDaysFlow.value = 10
         
         // Initial State Check (No spending)
@@ -74,26 +78,25 @@ class ContinuousAmortizationTest {
         testDispatcher.scheduler.advanceUntilIdle()
         
         var state = viewModel.uiState.value
-        // CurrentPool = 1000. DaysRemaining = 10. DailyLimit = 100.
-        assertEquals(100.0, state.dailyLimit, 0.01)
+        // Pool = 1000. DaysRemaining = 10. DailyLimit = 100.
+        assertEquals(10_000L, state.dailyLimit)
 
         // Spend 100 Today
         transactionsFlow.value = listOf(
-            Transaction(amount = 100.0, note = "Spending Today", date = now)
+            Transaction(amount = 10_000L, note = "Spending Today", date = nowMillis)
         )
         testDispatcher.scheduler.advanceUntilIdle()
         state = viewModel.uiState.value
 
         // Logic Check:
-        // TotalSpent = 100
-        // CurrentPool = 1000 - 100 = 900
-        // DaysRemaining = 10
-        // DailyLimit = 900 / 10 = 90.0
+        // SpentBeforeToday = 0
+        // Pool = 1000
+        // DailyLimit = 1000 / 10 = 100.0
         // SpentToday = 100
-        // AvailableToday = DailyLimit - SpentToday = 90 - 100 = -10.0
+        // AvailableToday = DailyLimit - SpentToday = 100 - 100 = 0.0
 
-        assertEquals(90.0, state.dailyLimit, 0.01)
-        assertEquals(-10.0, state.availableToday, 0.01)
+        assertEquals(10_000L, state.dailyLimit)
+        assertEquals(0L, state.availableToday)
     }
 
     @Test
@@ -102,24 +105,20 @@ class ContinuousAmortizationTest {
             viewModel.uiState.collect {}
         }
 
-        val zoneId = ZoneId.systemDefault()
-        val now = Instant.now()
         val todayDate = now.atZone(zoneId).toLocalDate()
         val yesterdayDate = todayDate.minusDays(1)
         
         val todayMillis = now.toEpochMilli()
         val yesterdayMillis = yesterdayDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
 
-        viewModel.setSystemTimeOverride(todayMillis)
-
         // Setup: TotalBudget = 1000, Days = 10, StartDate = Yesterday
-        totalBudgetFlow.value = 1000.0
+        totalBudgetFlow.value = 100_000L
         cycleStartDateFlow.value = yesterdayMillis
         totalDaysFlow.value = 10
 
         // Spend 100 Yesterday
         transactionsFlow.value = listOf(
-            Transaction(amount = 100.0, note = "Spending Yesterday", date = yesterdayMillis)
+            Transaction(amount = 10_000L, note = "Spending Yesterday", date = yesterdayMillis)
         )
         testDispatcher.scheduler.advanceUntilIdle()
         val state = viewModel.uiState.value
@@ -133,8 +132,8 @@ class ContinuousAmortizationTest {
         // AvailableToday = 100 - 0 = 100.0.
 
         assertEquals(9, state.daysRemaining)
-        assertEquals(100.0, state.dailyLimit, 0.01)
-        assertEquals(100.0, state.availableToday, 0.01)
+        assertEquals(10_000L, state.dailyLimit)
+        assertEquals(10_000L, state.availableToday)
     }
 
     @Test
@@ -143,30 +142,29 @@ class ContinuousAmortizationTest {
             viewModel.uiState.collect {}
         }
 
-        val now = System.currentTimeMillis()
-        viewModel.setSystemTimeOverride(now)
+        val nowMillis = now.toEpochMilli()
 
         // Setup: TotalBudget = 100, Days = 10, StartDate = Today
-        totalBudgetFlow.value = 100.0
-        cycleStartDateFlow.value = now
+        totalBudgetFlow.value = 10_000L
+        cycleStartDateFlow.value = nowMillis
         totalDaysFlow.value = 10
 
         // Spend 200 Today (Over Budget)
         transactionsFlow.value = listOf(
-            Transaction(amount = 200.0, note = "Over Budget", date = now)
+            Transaction(amount = 20_000L, note = "Over Budget", date = nowMillis)
         )
         testDispatcher.scheduler.advanceUntilIdle()
         val state = viewModel.uiState.value
 
         // Logic Check:
-        // TotalSpent = 200.
-        // CurrentPool = 100 - 200 = -100.
-        // DailyLimit = 0.0 (Clamped because CurrentPool < 0).
+        // SpentBeforeToday = 0.
+        // Pool = 100.
+        // DailyLimit = 10.0.
         // SpentToday = 200.
-        // AvailableToday = 0 - 200 = -200.0.
+        // AvailableToday = 10 - 200 = -190.0.
 
-        assertEquals(0.0, state.dailyLimit, 0.01)
-        assertEquals(-200.0, state.availableToday, 0.01)
+        assertEquals(1_000L, state.dailyLimit)
+        assertEquals(-19_000L, state.availableToday)
     }
 
     @Test
@@ -175,18 +173,14 @@ class ContinuousAmortizationTest {
             viewModel.uiState.collect {}
         }
 
-        val zoneId = ZoneId.systemDefault()
-        val now = Instant.now()
         val todayDate = now.atZone(zoneId).toLocalDate()
         val nineDaysAgoDate = todayDate.minusDays(9)
         
         val todayMillis = now.toEpochMilli()
         val nineDaysAgoMillis = nineDaysAgoDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
 
-        viewModel.setSystemTimeOverride(todayMillis)
-
         // Setup: TotalBudget = 100, Days = 10, StartDate = 9 days ago
-        totalBudgetFlow.value = 100.0
+        totalBudgetFlow.value = 10_000L
         cycleStartDateFlow.value = nineDaysAgoMillis
         totalDaysFlow.value = 10
         transactionsFlow.value = emptyList()
@@ -203,7 +197,7 @@ class ContinuousAmortizationTest {
         // AvailableToday = 100.0.
 
         assertEquals(1, state.daysRemaining)
-        assertEquals(100.0, state.dailyLimit, 0.01)
-        assertEquals(100.0, state.availableToday, 0.01)
+        assertEquals(10_000L, state.dailyLimit)
+        assertEquals(10_000L, state.availableToday)
     }
 }

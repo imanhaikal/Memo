@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import java.time.Clock
 import java.util.concurrent.atomic.AtomicInteger
 
 class CrudIntegrationTest {
@@ -30,11 +31,11 @@ class CrudIntegrationTest {
         context = InstrumentationRegistry.getInstrumentation().targetContext
         preferences = BudgetPreferences(context)
         transactionDao = FakeTransactionDao()
-        viewModel = MainViewModel(transactionDao, preferences)
+        viewModel = MainViewModel(transactionDao, preferences, Clock.systemDefaultZone())
 
         runBlocking {
             // Setup budget so we are on Dashboard
-            preferences.saveBudgetSettings(3000.0, System.currentTimeMillis(), 30)
+            preferences.saveBudgetSettings(300_000L, System.currentTimeMillis(), 30)
         }
 
         composeTestRule.setContent {
@@ -49,7 +50,7 @@ class CrudIntegrationTest {
     fun verifyEditTransactionFlow() {
         // 1. Add a transaction
         val note = "Test Item Edit"
-        val amount = 123.0
+        val amount = 12_300L
         viewModel.addTransaction(amount, note)
 
         // Wait for item to appear
@@ -68,7 +69,7 @@ class CrudIntegrationTest {
 
         // 4. Change amount
         // Use hasSetTextAction to ensure we target the input field, not the static text in the list (if visible)
-        val amountStr = "123.0"
+        val amountStr = "123"
         composeTestRule.onNode(hasText(amountStr) and hasSetTextAction()).performTextClearance()
         // After clearance, placeholder "0.00" should be visible
         composeTestRule.onNode(hasText("0.00") and hasSetTextAction()).performTextInput("456")
@@ -96,7 +97,7 @@ class CrudIntegrationTest {
     @Test
     fun verifyDeleteFromDialogFlow() {
         val note = "Delete Me Dialog"
-        viewModel.addTransaction(50.0, note)
+        viewModel.addTransaction(5_000L, note)
 
         composeTestRule.waitUntil {
             transactionDao.getTransactionsBlocking().any { it.note == note }
@@ -124,7 +125,7 @@ class CrudIntegrationTest {
     @Test
     fun verifySwipeToDeleteFlow() {
         val note = "Swipe Me"
-        viewModel.addTransaction(75.0, note)
+        viewModel.addTransaction(7_500L, note)
 
         composeTestRule.waitUntil {
             transactionDao.getTransactionsBlocking().any { it.note == note }
