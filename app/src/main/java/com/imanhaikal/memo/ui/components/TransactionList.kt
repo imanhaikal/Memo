@@ -51,7 +51,7 @@ fun TransactionList(
     onDelete: (Transaction) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
-    currencyCode: String = "USD"
+    currencyCode: String = "MYR"
 ) {
     LazyColumn(
         modifier = modifier,
@@ -75,7 +75,7 @@ fun TransactionItem(
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {},
     onDelete: () -> Unit = {},
-    currencyCode: String = "USD"
+    currencyCode: String = "MYR"
 ) {
     val currentOnDelete by rememberUpdatedState(onDelete)
     val dismissState = rememberSwipeToDismissBoxState(

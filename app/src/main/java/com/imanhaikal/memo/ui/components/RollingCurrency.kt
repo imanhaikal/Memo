@@ -18,7 +18,7 @@ fun RollingCurrency(
     style: TextStyle,
     color: Color,
     modifier: Modifier = Modifier,
-    currencyCode: String = "USD"
+    currencyCode: String = "MYR"
 ) {
     // We use Float for animation performance, assuming budget values fit within Float precision for display
     val animatedValue = remember { Animatable(value.toFloat()) }

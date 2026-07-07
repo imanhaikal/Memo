@@ -32,7 +32,7 @@ data class BudgetUiState(
     val totalBudget: Long = 0L,
     val spentToday: Long = 0L,
     val totalDays: Int = 30,
-    val currencyCode: String = "USD"
+    val currencyCode: String = "MYR"
 )
 
 class MainViewModel(
@@ -59,7 +59,7 @@ class MainViewModel(
         initialValue = BudgetUiState(isLoading = true)
     )
 
-    fun setupBudget(amountCents: Long, days: Int, currency: String = "USD") {
+    fun setupBudget(amountCents: Long, days: Int, currency: String = "MYR") {
         viewModelScope.launch {
             budgetPreferences.saveBudgetSettings(amountCents, clock.millis(), days, currency)
         }

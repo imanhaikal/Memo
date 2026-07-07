@@ -24,7 +24,7 @@ fun HeroSection(
     availableAmount: Long,
     status: BudgetStatus,
     modifier: Modifier = Modifier,
-    currencyCode: String = "USD"
+    currencyCode: String = "MYR"
 ) {
     MemoCard(modifier = modifier) {
         Column(

@@ -48,7 +48,7 @@ class BudgetPreferences(private val context: Context) {
     }
 
     val currency: Flow<String> = context.dataStore.data.map { preferences ->
-        preferences[CURRENCY] ?: "USD"
+        preferences[CURRENCY] ?: "MYR"
     }
 
     val budgetConfig: Flow<BudgetConfig> = context.dataStore.data.map { preferences ->
@@ -58,11 +58,11 @@ class BudgetPreferences(private val context: Context) {
                 ?: 0L,
             cycleStartDateMillis = preferences[CYCLE_START_DATE] ?: 0L,
             totalDays = preferences[TOTAL_DAYS] ?: 30,
-            currencyCode = preferences[CURRENCY] ?: "USD"
+            currencyCode = preferences[CURRENCY] ?: "MYR"
         )
     }.distinctUntilChanged()
 
-    suspend fun saveBudgetSettings(budgetCents: Long, startDate: Long, days: Int, currency: String = "USD") {
+    suspend fun saveBudgetSettings(budgetCents: Long, startDate: Long, days: Int, currency: String = "MYR") {
         context.dataStore.edit { preferences ->
             preferences[TOTAL_BUDGET] = budgetCents
             preferences[CYCLE_START_DATE] = startDate

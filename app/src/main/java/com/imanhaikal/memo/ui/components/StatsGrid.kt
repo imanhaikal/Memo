@@ -20,7 +20,7 @@ fun StatsGrid(
     dailyLimit: Long,
     daysRemaining: Int,
     modifier: Modifier = Modifier,
-    currencyCode: String = "USD"
+    currencyCode: String = "MYR"
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
