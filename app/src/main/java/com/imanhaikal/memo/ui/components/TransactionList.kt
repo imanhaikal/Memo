@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -28,6 +30,7 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,6 +92,14 @@ fun TransactionItem(
         }
     )
     val shape = RoundedCornerShape(16.dp)
+    val haptic = rememberStrongHaptics()
+
+    // Tick when the swipe crosses the delete threshold, so the gesture has a physical detent
+    LaunchedEffect(dismissState.targetValue) {
+        if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) {
+            haptic.tick()
+        }
+    }
 
     SwipeToDismissBox(
         state = dismissState,
@@ -119,13 +130,17 @@ fun TransactionItem(
             }
         },
         content = {
-            val haptic = rememberStrongHaptics()
+            val interactionSource = remember { MutableInteractionSource() }
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable {
-                        haptic.performClick()
+                    .springPress(interactionSource, pressedScale = PressScale.Surface)
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = LocalIndication.current
+                    ) {
+                        haptic.tick()
                         onClick()
                     }
                     .semantics {

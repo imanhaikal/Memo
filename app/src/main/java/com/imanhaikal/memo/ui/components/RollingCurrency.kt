@@ -26,8 +26,9 @@ fun RollingCurrency(
     LaunchedEffect(value) {
         animatedValue.animateTo(
             targetValue = value.toFloat(),
+            // No bounce: an overshooting spring would transiently display a wrong amount
             animationSpec = spring(
-                dampingRatio = Spring.DampingRatioLowBouncy,
+                dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessLow
             )
         )

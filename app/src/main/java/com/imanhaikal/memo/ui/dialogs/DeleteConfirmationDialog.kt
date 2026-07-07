@@ -8,12 +8,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import com.imanhaikal.memo.ui.theme.AppColors
+import com.imanhaikal.memo.utils.rememberStrongHaptics
 
 @Composable
 fun DeleteConfirmationDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val haptic = rememberStrongHaptics()
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -32,7 +34,10 @@ fun DeleteConfirmationDialog(
         },
         confirmButton = {
             Button(
-                onClick = onConfirm,
+                onClick = {
+                    haptic.error()
+                    onConfirm()
+                },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = AppColors.Red,
                     contentColor = androidx.compose.ui.graphics.Color.White

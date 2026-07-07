@@ -2,4 +2,10 @@
 <resources>
 
     <style name="Theme.Memo" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.Memo.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/memo_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.Memo</item>
+    </style>
 </resources>

@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -36,9 +38,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import com.imanhaikal.memo.utils.rememberStrongHaptics
@@ -46,6 +48,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.imanhaikal.memo.ui.components.PressScale
+import com.imanhaikal.memo.ui.components.springPress
 import com.imanhaikal.memo.ui.theme.AppColors
 import com.imanhaikal.memo.ui.theme.MemoTheme
 import com.imanhaikal.memo.utils.CurrencyUtils
@@ -75,8 +79,17 @@ fun AddExpenseDialog(
     val scale = remember { Animatable(0.9f) }
     val alpha = remember { Animatable(0f) }
     val haptic = rememberStrongHaptics()
+    val amountFocusRequester = remember { FocusRequester() }
+
+    val submit = {
+        if (amountCents != null) {
+            haptic.success()
+            onConfirm(amountCents, noteText)
+        }
+    }
 
     LaunchedEffect(Unit) {
+        amountFocusRequester.requestFocus()
         launch {
             scale.animateTo(
                 targetValue = 1f,
@@ -130,7 +143,9 @@ fun AddExpenseDialog(
                         keyboardType = KeyboardType.Decimal,
                         imeAction = ImeAction.Next
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(amountFocusRequester)
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -145,6 +160,7 @@ fun AddExpenseDialog(
                         capitalization = KeyboardCapitalization.Sentences,
                         imeAction = ImeAction.Done
                     ),
+                    keyboardActions = KeyboardActions(onDone = { submit() }),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -156,16 +172,19 @@ fun AddExpenseDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (transaction != null && onDelete != null) {
+                        val deleteInteraction = remember { MutableInteractionSource() }
                         OutlinedButton(
                             onClick = {
-                                haptic.performClick()
+                                haptic.tick()
                                 onDelete()
                             },
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = AppColors.Red
                             ),
                             border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Red),
+                            interactionSource = deleteInteraction,
                             modifier = Modifier
+                                .springPress(deleteInteraction)
                                 .width(50.dp)
                                 .height(50.dp),
                             shape = RoundedCornerShape(50),
@@ -181,19 +200,17 @@ fun AddExpenseDialog(
                         Spacer(modifier = Modifier.width(12.dp))
                     }
 
+                    val confirmInteraction = remember { MutableInteractionSource() }
                     Button(
-                        onClick = {
-                            haptic.performClick()
-                            if (amountCents != null) {
-                                onConfirm(amountCents, noteText)
-                            }
-                        },
+                        onClick = submit,
                         enabled = amountCents != null,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = AppColors.Yellow,
                             contentColor = AppColors.TextPrimary
                         ),
+                        interactionSource = confirmInteraction,
                         modifier = Modifier
+                            .springPress(confirmInteraction)
                             .weight(1f)
                             .height(50.dp),
                         shape = RoundedCornerShape(50)

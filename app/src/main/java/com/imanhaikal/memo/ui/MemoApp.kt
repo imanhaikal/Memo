@@ -1,9 +1,18 @@
 package com.imanhaikal.memo.ui
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -99,45 +108,65 @@ fun MemoApp(
         ) { innerPadding ->
             if (!state.isLoading) {
                 if (!state.isSetup) {
-                    // Show Setup Dialog (Overlay)
-                    // We can still show the dashboard behind it or just the dialog.
-                    // Given the design usually implies a modal over content, but if not setup,
-                    // the content might be empty or confusing.
-                    // However, DashboardScreen handles empty states gracefully (usually).
-                    // But to force setup, we show the dialog.
+                    // Force setup before showing any content
                     SetupDialog(
                         onConfirm = { amount, days ->
                             viewModel.setupBudget(amount, days)
                         },
                         onDismiss = { /* Not dismissible until setup */ }
                     )
-                } else if (showSettings) {
-                    SettingsScreen(
-                        state = state,
-                        onBack = { showSettings = false },
-                        onSave = { amount, days, currency ->
-                            viewModel.updateBudget(amount, days, currency)
-                        },
-                        onReset = {
-                            viewModel.resetBudget()
-                            showSettings = false
-                        },
-                        contentPadding = innerPadding
-                    )
                 } else {
-                    // Show Dashboard
-                    DashboardScreen(
-                        state = state,
-                        onOpenSettings = { showSettings = true },
-                        onEditTransaction = { transaction ->
-                            transactionToEditId = transaction.id
-                            showAddExpenseDialog = true
+                    // System back mirrors the in-app back affordance
+                    BackHandler(enabled = showSettings) { showSettings = false }
+
+                    // Shared-axis-X style transition between Dashboard and Settings
+                    AnimatedContent(
+                        targetState = showSettings,
+                        transitionSpec = {
+                            val duration = 300
+                            val distance = 60
+                            if (targetState) {
+                                (slideInHorizontally(tween(duration, easing = FastOutSlowInEasing)) { distance } +
+                                    fadeIn(tween(duration))) togetherWith
+                                    (slideOutHorizontally(tween(duration, easing = FastOutSlowInEasing)) { -distance } +
+                                        fadeOut(tween(duration)))
+                            } else {
+                                (slideInHorizontally(tween(duration, easing = FastOutSlowInEasing)) { -distance } +
+                                    fadeIn(tween(duration))) togetherWith
+                                    (slideOutHorizontally(tween(duration, easing = FastOutSlowInEasing)) { distance } +
+                                        fadeOut(tween(duration)))
+                            }
                         },
-                        onDeleteTransaction = { transaction ->
-                            transactionToDeleteId = transaction.id
-                        },
-                        contentPadding = innerPadding
-                    )
+                        label = "screenNav"
+                    ) { inSettings ->
+                        if (inSettings) {
+                            SettingsScreen(
+                                state = state,
+                                onBack = { showSettings = false },
+                                onSave = { amount, days, currency ->
+                                    viewModel.updateBudget(amount, days, currency)
+                                },
+                                onReset = {
+                                    viewModel.resetBudget()
+                                    showSettings = false
+                                },
+                                contentPadding = innerPadding
+                            )
+                        } else {
+                            DashboardScreen(
+                                state = state,
+                                onOpenSettings = { showSettings = true },
+                                onEditTransaction = { transaction ->
+                                    transactionToEditId = transaction.id
+                                    showAddExpenseDialog = true
+                                },
+                                onDeleteTransaction = { transaction ->
+                                    transactionToDeleteId = transaction.id
+                                },
+                                contentPadding = innerPadding
+                            )
+                        }
+                    }
                 }
 
                 if (showAddExpenseDialog) {

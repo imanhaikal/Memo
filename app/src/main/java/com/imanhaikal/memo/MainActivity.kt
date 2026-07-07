@@ -4,23 +4,27 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.activity.viewModels
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.imanhaikal.memo.ui.MainViewModel
 import com.imanhaikal.memo.ui.theme.MemoTheme
 import com.imanhaikal.memo.ui.MemoApp
 
 class MainActivity : ComponentActivity() {
+
+    private val viewModel: MainViewModel by viewModels { MainViewModel.Factory }
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Hold the splash until the first real UI state is ready, so the app
+        // never flashes a blank frame between launch and the dashboard entrance
+        val splashScreen = installSplashScreen()
+        splashScreen.setKeepOnScreenCondition { viewModel.uiState.value.isLoading }
+
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             MemoTheme {
-                MemoApp()
+                MemoApp(viewModel = viewModel)
             }
         }
     }

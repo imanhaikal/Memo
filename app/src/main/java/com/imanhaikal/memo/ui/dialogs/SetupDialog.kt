@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -28,14 +30,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import com.imanhaikal.memo.utils.rememberStrongHaptics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.imanhaikal.memo.ui.components.springPress
 import com.imanhaikal.memo.ui.theme.AppColors
 import com.imanhaikal.memo.ui.theme.MemoTheme
 import com.imanhaikal.memo.utils.CurrencyUtils
@@ -55,8 +59,17 @@ fun SetupDialog(
     val scale = remember { Animatable(0.9f) }
     val alpha = remember { Animatable(0f) }
     val haptic = rememberStrongHaptics()
+    val amountFocusRequester = remember { FocusRequester() }
+
+    val submit = {
+        if (amountCents != null && days != null && days > 0) {
+            haptic.success()
+            onConfirm(amountCents, days)
+        }
+    }
 
     LaunchedEffect(Unit) {
+        amountFocusRequester.requestFocus()
         launch {
             scale.animateTo(
                 targetValue = 1f,
@@ -110,8 +123,13 @@ fun SetupDialog(
                     onValueChange = { amountText = it },
                     label = "Total Budget",
                     placeholder = "e.g. 1000",
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.fillMaxWidth()
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal,
+                        imeAction = ImeAction.Next
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(amountFocusRequester)
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -122,27 +140,28 @@ fun SetupDialog(
                     onValueChange = { daysText = it },
                     label = "Number of Days",
                     placeholder = "e.g. 30",
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { submit() }),
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
 
+                val confirmInteraction = remember { MutableInteractionSource() }
                 Button(
-                    onClick = {
-                        haptic.performClick()
-                        val validAmountCents = amountCents
-                        val validDays = days
-                        if (validAmountCents != null && validDays != null && validDays > 0) {
-                            onConfirm(validAmountCents, validDays)
-                        }
-                    },
+                    onClick = submit,
                     enabled = isValid,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = AppColors.Yellow,
                         contentColor = AppColors.TextPrimary
                     ),
-                    modifier = Modifier.fillMaxWidth(),
+                    interactionSource = confirmInteraction,
+                    modifier = Modifier
+                        .springPress(confirmInteraction)
+                        .fillMaxWidth(),
                     shape = RoundedCornerShape(50)
                 ) {
                     Text(

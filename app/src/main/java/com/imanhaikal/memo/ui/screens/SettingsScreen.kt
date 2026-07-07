@@ -2,7 +2,12 @@ package com.imanhaikal.memo.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.imeNestedScroll
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,10 +41,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -47,9 +54,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.imanhaikal.memo.ui.BudgetUiState
 import com.imanhaikal.memo.ui.components.MemoInput
+import com.imanhaikal.memo.ui.components.PressScale
+import com.imanhaikal.memo.ui.components.springPress
 import com.imanhaikal.memo.ui.theme.AppColors
 import com.imanhaikal.memo.utils.CurrencyUtils
+import com.imanhaikal.memo.utils.rememberStrongHaptics
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     state: BudgetUiState,
@@ -65,6 +76,7 @@ fun SettingsScreen(
     var selectedCurrency by rememberSaveable { mutableStateOf(state.currencyCode) }
     var showCurrencyDropdown by rememberSaveable { mutableStateOf(false) }
     var showResetDialog by rememberSaveable { mutableStateOf(false) }
+    val haptic = rememberStrongHaptics()
 
     // Update inputs when state changes (e.g. initial load)
     LaunchedEffect(state) {
@@ -95,6 +107,10 @@ fun SettingsScreen(
             .padding(contentPadding)
             .statusBarsPadding()
             .navigationBarsPadding()
+            // Keep the form above the keyboard, moving in sync with the IME's own curve,
+            // and let a downward drag on the form dismiss it interactively
+            .imePadding()
+            .imeNestedScroll()
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
@@ -171,6 +187,7 @@ fun SettingsScreen(
                                     )
                                 },
                                 onClick = {
+                                    haptic.tick()
                                     selectedCurrency = code
                                     showCurrencyDropdown = false
                                 }
@@ -220,17 +237,22 @@ fun SettingsScreen(
                 )
             }
 
+            val saveInteraction = remember { MutableInteractionSource() }
             Button(
                 onClick = {
                     val validBudgetCents = currentBudgetCents
                     val validDays = currentDays
                     if (validBudgetCents != null && validDays != null && validDays > 0) {
+                        haptic.success()
                         onSave(validBudgetCents, validDays, selectedCurrency)
                         onBack() // Go back after saving
                     }
                 },
                 enabled = isValid && hasChanges,
-                modifier = Modifier.fillMaxWidth(),
+                interactionSource = saveInteraction,
+                modifier = Modifier
+                    .springPress(saveInteraction)
+                    .fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = AppColors.Yellow,
                     contentColor = AppColors.TextPrimary,
@@ -264,11 +286,21 @@ fun SettingsScreen(
                 ),
             )
 
+            val resetInteraction = remember { MutableInteractionSource() }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(AppColors.RedSubtle, RoundedCornerShape(12.dp))
-                    .clickable { showResetDialog = true }
+                    .springPress(resetInteraction, pressedScale = PressScale.Surface)
+                    // Clip before clickable so the ripple honors the rounded shape
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(AppColors.RedSubtle)
+                    .clickable(
+                        interactionSource = resetInteraction,
+                        indication = LocalIndication.current
+                    ) {
+                        haptic.tick()
+                        showResetDialog = true
+                    }
                     .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -291,6 +323,7 @@ fun SettingsScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
+                        haptic.error()
                         onReset()
                         showResetDialog = false
                     }
