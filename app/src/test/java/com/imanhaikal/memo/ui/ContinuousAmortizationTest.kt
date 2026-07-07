@@ -166,12 +166,43 @@ class ContinuousAmortizationTest {
         // Logic Check:
         // SpentBeforeToday = 0.
         // Pool = 100.
-        // DailyLimit = 10.0.
-        // SpentToday = 200.
+        // BaselineLimit = 10.0.
+        // SpentToday = 200 (over the allowance) -> overspend amortized over remaining days:
+        // (100 - 200) / 9 is negative -> clamped to 0.
         // AvailableToday = 10 - 200 = -190.0.
 
-        assertEquals(1_000L, state.dailyLimit)
+        assertEquals(0L, state.dailyLimit)
         assertEquals(-19_000L, state.availableToday)
+    }
+
+    @Test
+    fun `Scenario 5 Over Limit - Overspending TODAY re-amortizes the dailyLimit across remaining days`() = runTest {
+        backgroundScope.launch(testDispatcher) {
+            viewModel.uiState.collect {}
+        }
+
+        val nowMillis = now.toEpochMilli()
+
+        // Setup: TotalBudget = 1000, Days = 10, StartDate = Today
+        setTotalBudget(100_000L)
+        setCycleStartDate(nowMillis)
+        setTotalDays(10)
+
+        // Spend 190 Today (baseline limit is 100)
+        transactionsFlow.value = listOf(
+            Transaction(amount = 19_000L, note = "Over Limit Today", date = nowMillis)
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+        val state = viewModel.uiState.value
+
+        // Logic Check:
+        // Pool = 1000. BaselineLimit = 1000 / 10 = 100.
+        // SpentToday = 190 > 100 -> DailyLimit = (1000 - 190) / 9 = 90.
+        // AvailableToday = 100 - 190 = -90.
+
+        assertEquals(9_000L, state.dailyLimit)
+        assertEquals(-9_000L, state.availableToday)
+        assertEquals(BudgetStatus.OVER_LIMIT, state.status)
     }
 
     @Test

@@ -65,10 +65,19 @@ class BudgetCalculatorUseCase(private val clock: Clock) {
         
         // Baseline daily limit based on pool and remaining days
         val rawDailyLimit = pool / daysRemaining
-        val dailyLimit = if (pool < 0) 0L else rawDailyLimit
+        val baselineLimit = if (pool < 0) 0L else rawDailyLimit
 
-        // Available today
-        val availableToday = dailyLimit - spentToday
+        // Available today is measured against today's original allowance
+        val availableToday = baselineLimit - spentToday
+
+        // Once today's spending exceeds the allowance, the overspend must come out of
+        // the remaining days, so the displayed limit re-amortizes immediately instead
+        // of waiting for the next day's recalculation.
+        val dailyLimit = if (spentToday > baselineLimit && daysRemaining > 1) {
+            max(0L, (pool - spentToday) / (daysRemaining - 1))
+        } else {
+            baselineLimit
+        }
 
         // Status Determination
         val status = when {

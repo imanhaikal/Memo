@@ -88,13 +88,14 @@ The heart of the application is the dynamic recalculation engine located in `Mai
     *   **Remaining Pool (P):** `T - S_prev`. This is the cash currently on hand for the rest of the cycle (including today).
 
 4.  **Derive Daily Limit:**
-    *   **New Daily Limit (L):** `P / R`.
+    *   **Baseline Limit (L):** `P / R`.
         *   This represents how much you can spend *every day* from now until the end of the cycle to land perfectly at 0.
     *   **Available Today (A):** `L - S_today`.
         *   This is the "One Big Number" shown to the user.
+    *   **New Daily Limit (displayed):** normally `L`, but if `S_today > L` (over limit) and `R > 1`, the overspend is re-amortized immediately: `(P - S_today) / (R - 1)`, floored at `0`.
 
 ### 4.2 Edge Cases
-*   **Bankruptcy:** If `P <= 0`, `New Daily Limit` is forced to `0`. The user is in debt to themselves.
+*   **Bankruptcy:** If `P <= 0` (or today's overspend exhausts the pool), `New Daily Limit` is forced to `0`. The user is in debt to themselves.
 *   **Last Day:** If `R == 1`, `New Daily Limit` equals the entire `Remaining Pool`.
 
 ---
