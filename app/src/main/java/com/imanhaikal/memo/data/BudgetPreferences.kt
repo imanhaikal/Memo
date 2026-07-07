@@ -10,10 +10,18 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlin.math.roundToLong
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "budget_preferences")
+
+data class BudgetConfig(
+    val totalBudgetCents: Long,
+    val cycleStartDateMillis: Long,
+    val totalDays: Int,
+    val currencyCode: String
+)
 
 class BudgetPreferences(private val context: Context) {
 
@@ -42,6 +50,17 @@ class BudgetPreferences(private val context: Context) {
     val currency: Flow<String> = context.dataStore.data.map { preferences ->
         preferences[CURRENCY] ?: "USD"
     }
+
+    val budgetConfig: Flow<BudgetConfig> = context.dataStore.data.map { preferences ->
+        BudgetConfig(
+            totalBudgetCents = preferences[TOTAL_BUDGET]
+                ?: preferences[LEGACY_TOTAL_BUDGET]?.let { (it * 100).roundToLong() }
+                ?: 0L,
+            cycleStartDateMillis = preferences[CYCLE_START_DATE] ?: 0L,
+            totalDays = preferences[TOTAL_DAYS] ?: 30,
+            currencyCode = preferences[CURRENCY] ?: "USD"
+        )
+    }.distinctUntilChanged()
 
     suspend fun saveBudgetSettings(budgetCents: Long, startDate: Long, days: Int, currency: String = "USD") {
         context.dataStore.edit { preferences ->

@@ -44,17 +44,14 @@ class MainViewModel(
 
     val uiState: StateFlow<BudgetUiState> = combine(
         transactionDao.getAllTransactions(),
-        budgetPreferences.totalBudget,
-        budgetPreferences.cycleStartDate,
-        budgetPreferences.totalDays,
-        budgetPreferences.currency
-    ) { transactions, totalBudget, cycleStartDate, totalDays, currency ->
+        budgetPreferences.budgetConfig
+    ) { transactions, config ->
         budgetCalculator.calculate(
-            transactions = transactions.sortedByDescending { it.date },
-            totalBudgetCents = totalBudget,
-            cycleStartDateMillis = cycleStartDate,
-            totalDays = totalDays,
-            currencyCode = currency
+            transactions = transactions,
+            totalBudgetCents = config.totalBudgetCents,
+            cycleStartDateMillis = config.cycleStartDateMillis,
+            totalDays = config.totalDays,
+            currencyCode = config.currencyCode
         )
     }.stateIn(
         scope = viewModelScope,

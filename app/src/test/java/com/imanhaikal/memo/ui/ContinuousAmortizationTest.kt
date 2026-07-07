@@ -1,5 +1,6 @@
 package com.imanhaikal.memo.ui
 
+import com.imanhaikal.memo.data.BudgetConfig
 import com.imanhaikal.memo.data.BudgetPreferences
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.data.TransactionDao
@@ -31,13 +32,22 @@ class ContinuousAmortizationTest {
 
     // Mock data flows
     private val transactionsFlow = MutableStateFlow<List<Transaction>>(emptyList())
-    private val totalBudgetFlow = MutableStateFlow(0L)
-    private val cycleStartDateFlow = MutableStateFlow(0L)
-    private val totalDaysFlow = MutableStateFlow(30)
-    private val currencyFlow = MutableStateFlow("USD")
+    private val configFlow = MutableStateFlow(BudgetConfig(0L, 0L, 30, "USD"))
     private val zoneId = ZoneId.systemDefault()
     private val now = Instant.parse("2024-01-15T12:00:00Z")
     private lateinit var clock: Clock
+
+    private fun setTotalBudget(cents: Long) {
+        configFlow.value = configFlow.value.copy(totalBudgetCents = cents)
+    }
+
+    private fun setCycleStartDate(millis: Long) {
+        configFlow.value = configFlow.value.copy(cycleStartDateMillis = millis)
+    }
+
+    private fun setTotalDays(days: Int) {
+        configFlow.value = configFlow.value.copy(totalDays = days)
+    }
 
     @Before
     fun setup() {
@@ -46,10 +56,7 @@ class ContinuousAmortizationTest {
         budgetPreferences = mockk()
 
         every { transactionDao.getAllTransactions() } returns transactionsFlow
-        every { budgetPreferences.totalBudget } returns totalBudgetFlow
-        every { budgetPreferences.cycleStartDate } returns cycleStartDateFlow
-        every { budgetPreferences.totalDays } returns totalDaysFlow
-        every { budgetPreferences.currency } returns currencyFlow
+        every { budgetPreferences.budgetConfig } returns configFlow
 
         clock = Clock.fixed(now, zoneId)
         viewModel = MainViewModel(transactionDao, budgetPreferences, clock)
@@ -69,10 +76,10 @@ class ContinuousAmortizationTest {
         // Setup: TotalBudget = 1000, Days = 10, StartDate = Today
         val nowMillis = now.toEpochMilli()
 
-        totalBudgetFlow.value = 100_000L
-        cycleStartDateFlow.value = nowMillis
-        totalDaysFlow.value = 10
-        
+        setTotalBudget(100_000L)
+        setCycleStartDate(nowMillis)
+        setTotalDays(10)
+
         // Initial State Check (No spending)
         transactionsFlow.value = emptyList()
         testDispatcher.scheduler.advanceUntilIdle()
@@ -112,9 +119,9 @@ class ContinuousAmortizationTest {
         val yesterdayMillis = yesterdayDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
 
         // Setup: TotalBudget = 1000, Days = 10, StartDate = Yesterday
-        totalBudgetFlow.value = 100_000L
-        cycleStartDateFlow.value = yesterdayMillis
-        totalDaysFlow.value = 10
+        setTotalBudget(100_000L)
+        setCycleStartDate(yesterdayMillis)
+        setTotalDays(10)
 
         // Spend 100 Yesterday
         transactionsFlow.value = listOf(
@@ -145,9 +152,9 @@ class ContinuousAmortizationTest {
         val nowMillis = now.toEpochMilli()
 
         // Setup: TotalBudget = 100, Days = 10, StartDate = Today
-        totalBudgetFlow.value = 10_000L
-        cycleStartDateFlow.value = nowMillis
-        totalDaysFlow.value = 10
+        setTotalBudget(10_000L)
+        setCycleStartDate(nowMillis)
+        setTotalDays(10)
 
         // Spend 200 Today (Over Budget)
         transactionsFlow.value = listOf(
@@ -180,9 +187,9 @@ class ContinuousAmortizationTest {
         val nineDaysAgoMillis = nineDaysAgoDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
 
         // Setup: TotalBudget = 100, Days = 10, StartDate = 9 days ago
-        totalBudgetFlow.value = 10_000L
-        cycleStartDateFlow.value = nineDaysAgoMillis
-        totalDaysFlow.value = 10
+        setTotalBudget(10_000L)
+        setCycleStartDate(nineDaysAgoMillis)
+        setTotalDays(10)
         transactionsFlow.value = emptyList()
 
         testDispatcher.scheduler.advanceUntilIdle()

@@ -1,5 +1,6 @@
 package com.imanhaikal.memo.ui
 
+import com.imanhaikal.memo.data.BudgetConfig
 import com.imanhaikal.memo.data.BudgetPreferences
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.data.TransactionDao
@@ -31,13 +32,22 @@ class MainViewModelTest {
 
     // Mock data flows
     private val transactionsFlow = MutableStateFlow<List<Transaction>>(emptyList())
-    private val totalBudgetFlow = MutableStateFlow(0L)
-    private val cycleStartDateFlow = MutableStateFlow(0L)
-    private val totalDaysFlow = MutableStateFlow(30)
-    private val currencyFlow = MutableStateFlow("USD")
+    private val configFlow = MutableStateFlow(BudgetConfig(0L, 0L, 30, "USD"))
     private val zoneId = ZoneId.systemDefault()
     private val now = Instant.parse("2024-01-15T12:00:00Z")
     private lateinit var clock: Clock
+
+    private fun setTotalBudget(cents: Long) {
+        configFlow.value = configFlow.value.copy(totalBudgetCents = cents)
+    }
+
+    private fun setCycleStartDate(millis: Long) {
+        configFlow.value = configFlow.value.copy(cycleStartDateMillis = millis)
+    }
+
+    private fun setTotalDays(days: Int) {
+        configFlow.value = configFlow.value.copy(totalDays = days)
+    }
 
     @Before
     fun setup() {
@@ -46,10 +56,7 @@ class MainViewModelTest {
         budgetPreferences = mockk()
 
         every { transactionDao.getAllTransactions() } returns transactionsFlow
-        every { budgetPreferences.totalBudget } returns totalBudgetFlow
-        every { budgetPreferences.cycleStartDate } returns cycleStartDateFlow
-        every { budgetPreferences.totalDays } returns totalDaysFlow
-        every { budgetPreferences.currency } returns currencyFlow
+        every { budgetPreferences.budgetConfig } returns configFlow
 
         clock = Clock.fixed(now, zoneId)
         viewModel = MainViewModel(transactionDao, budgetPreferences, clock)
@@ -70,9 +77,9 @@ class MainViewModelTest {
         // Setup: Budget 3000, 30 days, Start Date is NOW
         val nowMillis = now.toEpochMilli()
 
-        totalBudgetFlow.value = 300_000L
-        cycleStartDateFlow.value = nowMillis
-        totalDaysFlow.value = 30
+        setTotalBudget(300_000L)
+        setCycleStartDate(nowMillis)
+        setTotalDays(30)
         transactionsFlow.value = emptyList()
         
         testDispatcher.scheduler.advanceUntilIdle()
@@ -99,10 +106,10 @@ class MainViewModelTest {
         // Setup: Budget 3000, 30 days
         val nowMillis = now.toEpochMilli()
 
-        totalBudgetFlow.value = 300_000L
-        cycleStartDateFlow.value = nowMillis
-        totalDaysFlow.value = 30
-        
+        setTotalBudget(300_000L)
+        setCycleStartDate(nowMillis)
+        setTotalDays(30)
+
         // Add a transaction of 50 today
         transactionsFlow.value = listOf(
             Transaction(id = 1, amount = 5_000L, note = "Food", date = nowMillis)
@@ -140,10 +147,10 @@ class MainViewModelTest {
         val todayMillis = now.toEpochMilli()
         val startOfYesterdayMillis = yesterdayDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
 
-        totalBudgetFlow.value = 300_000L
-        cycleStartDateFlow.value = startOfYesterdayMillis // Started yesterday
-        totalDaysFlow.value = 30
-        
+        setTotalBudget(300_000L)
+        setCycleStartDate(startOfYesterdayMillis) // Started yesterday
+        setTotalDays(30)
+
         // No spending
         transactionsFlow.value = emptyList()
 
@@ -170,10 +177,10 @@ class MainViewModelTest {
         // Setup: Budget 3000, 30 days
         val nowMillis = now.toEpochMilli()
         
-        totalBudgetFlow.value = 300_000L
-        cycleStartDateFlow.value = nowMillis
-        totalDaysFlow.value = 30
-        
+        setTotalBudget(300_000L)
+        setCycleStartDate(nowMillis)
+        setTotalDays(30)
+
         // 1. Over Limit
         // Daily limit is 100. If we spend 101, available is -1.
         transactionsFlow.value = listOf(Transaction(amount = 10_100L, note = "Big Spend", date = nowMillis))

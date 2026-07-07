@@ -1,10 +1,9 @@
 package com.imanhaikal.memo.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,12 +22,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.imanhaikal.memo.data.Transaction
@@ -38,6 +36,7 @@ import com.imanhaikal.memo.ui.components.StatsGrid
 import com.imanhaikal.memo.ui.components.TransactionItem
 import com.imanhaikal.memo.ui.theme.AppColors
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -149,17 +148,24 @@ fun StaggeredEntrance(
     index: Int,
     content: @Composable () -> Unit
 ) {
-    var visible by remember { mutableStateOf(false) }
+    val density = LocalDensity.current
+    val initialOffsetPx = with(density) { 24.dp.toPx() }
+    val alpha = remember { Animatable(0f) }
+    val translationY = remember { Animatable(initialOffsetPx) }
+
     LaunchedEffect(Unit) {
         delay(index * 100L)
-        visible = true
+        launch { alpha.animateTo(1f, animationSpec = tween(durationMillis = 300)) }
+        launch { translationY.animateTo(0f, animationSpec = tween(durationMillis = 300)) }
     }
-    AnimatedVisibility(
-        visible = visible,
-        enter = slideInVertically(
-            animationSpec = tween(durationMillis = 300)
-        ) { it / 2 } + fadeIn(animationSpec = tween(durationMillis = 300)),
-        modifier = Modifier.fillMaxWidth()
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                this.alpha = alpha.value
+                this.translationY = translationY.value
+            }
     ) {
         content()
     }

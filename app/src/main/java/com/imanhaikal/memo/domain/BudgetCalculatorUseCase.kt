@@ -31,10 +31,19 @@ class BudgetCalculatorUseCase(private val clock: Clock) {
 
         // Time calculations using Clock
         val todayDate = clock.instant().atZone(clock.zone).toLocalDate()
-        val startDate = Instant.ofEpochMilli(cycleStartDateMillis).atZone(clock.zone).toLocalDate()
+        var startDate = Instant.ofEpochMilli(cycleStartDateMillis).atZone(clock.zone).toLocalDate()
+
+        // Roll the cycle forward by whole periods so today always falls within the active cycle,
+        // instead of leaving the calculator stuck showing a stale, already-ended cycle.
+        val daysSinceStart = ChronoUnit.DAYS.between(startDate, todayDate)
+        if (daysSinceStart >= totalDays) {
+            val cyclesElapsed = daysSinceStart / totalDays
+            startDate = startDate.plusDays(cyclesElapsed * totalDays)
+        }
         val endDateExclusive = startDate.plusDays(totalDays.toLong())
-        val activeTransactions = transactions.filter {
-            val txDate = Instant.ofEpochMilli(it.date).atZone(clock.zone).toLocalDate()
+
+        val transactionsWithDates = transactions.map { it to Instant.ofEpochMilli(it.date).atZone(clock.zone).toLocalDate() }
+        val activeTransactions = transactionsWithDates.filter { (_, txDate) ->
             !txDate.isBefore(startDate) && txDate.isBefore(endDateExclusive)
         }
 
@@ -44,16 +53,12 @@ class BudgetCalculatorUseCase(private val clock: Clock) {
 
         // Strict Daily Pool Logic
         // Spent before today
-        val spentBeforeToday = activeTransactions.filter {
-            val txDate = Instant.ofEpochMilli(it.date).atZone(clock.zone).toLocalDate()
-            txDate.isBefore(todayDate)
-        }.sumOf { it.amount }
+        val spentBeforeToday = activeTransactions.filter { (_, txDate) -> txDate.isBefore(todayDate) }
+            .sumOf { (tx, _) -> tx.amount }
 
         // Spent today
-        val spentToday = activeTransactions.filter {
-            val txDate = Instant.ofEpochMilli(it.date).atZone(clock.zone).toLocalDate()
-            txDate.isEqual(todayDate)
-        }.sumOf { it.amount }
+        val spentToday = activeTransactions.filter { (_, txDate) -> txDate.isEqual(todayDate) }
+            .sumOf { (tx, _) -> tx.amount }
 
         // Pool is based only on past spending
         val pool = totalBudgetCents - spentBeforeToday

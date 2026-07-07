@@ -1,5 +1,6 @@
 package com.imanhaikal.memo.ui
 
+import com.imanhaikal.memo.data.BudgetConfig
 import com.imanhaikal.memo.data.BudgetPreferences
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.data.TransactionDao
@@ -31,10 +32,7 @@ class DaysRemainingTest {
 
     // Mock data flows
     private val transactionsFlow = MutableStateFlow<List<Transaction>>(emptyList())
-    private val totalBudgetFlow = MutableStateFlow(100_000L)
-    private val cycleStartDateFlow = MutableStateFlow(0L)
-    private val totalDaysFlow = MutableStateFlow(30)
-    private val currencyFlow = MutableStateFlow("USD")
+    private val configFlow = MutableStateFlow(BudgetConfig(100_000L, 0L, 30, "USD"))
     private val zoneId = ZoneId.systemDefault()
 
     @Before
@@ -44,10 +42,7 @@ class DaysRemainingTest {
         budgetPreferences = mockk()
 
         every { transactionDao.getAllTransactions() } returns transactionsFlow
-        every { budgetPreferences.totalBudget } returns totalBudgetFlow
-        every { budgetPreferences.cycleStartDate } returns cycleStartDateFlow
-        every { budgetPreferences.totalDays } returns totalDaysFlow
-        every { budgetPreferences.currency } returns currencyFlow
+        every { budgetPreferences.budgetConfig } returns configFlow
 
         viewModel = MainViewModel(transactionDao, budgetPreferences, Clock.systemDefaultZone())
     }
@@ -67,7 +62,7 @@ class DaysRemainingTest {
 
     private fun setStartDate(date: LocalDate) {
         val time = date.atStartOfDay(zoneId).toInstant().toEpochMilli()
-        cycleStartDateFlow.value = time
+        configFlow.value = configFlow.value.copy(cycleStartDateMillis = time)
     }
 
     @Test
@@ -76,7 +71,7 @@ class DaysRemainingTest {
         setDate(today)
         backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
         setStartDate(today)
-        totalDaysFlow.value = 30
+        configFlow.value = configFlow.value.copy(totalDays = 30)
 
         testDispatcher.scheduler.advanceUntilIdle()
         assertEquals(30, viewModel.uiState.value.daysRemaining)
@@ -89,7 +84,7 @@ class DaysRemainingTest {
         setDate(today)
         backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
         setStartDate(start)
-        totalDaysFlow.value = 30
+        configFlow.value = configFlow.value.copy(totalDays = 30)
 
         // passed = 15. remaining = 30 - 15 = 15.
         testDispatcher.scheduler.advanceUntilIdle()
@@ -106,25 +101,26 @@ class DaysRemainingTest {
         setDate(today)
         backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
         setStartDate(start)
-        totalDaysFlow.value = 30
+        configFlow.value = configFlow.value.copy(totalDays = 30)
 
         testDispatcher.scheduler.advanceUntilIdle()
         assertEquals(1, viewModel.uiState.value.daysRemaining)
     }
 
     @Test
-    fun `Test Past Cycle - Should remain at 1 per current logic`() = runTest {
+    fun `Test Past Cycle - Should roll over to a fresh cycle instead of freezing at 1`() = runTest {
         val start = LocalDate.of(2023, 1, 1)
-        val today = LocalDate.of(2023, 2, 5) // Way past 30 days
-        
+        val today = LocalDate.of(2023, 2, 5) // 35 days after start, one 30-day cycle has fully elapsed
+
         setDate(today)
         backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
         setStartDate(start)
-        totalDaysFlow.value = 30
+        configFlow.value = configFlow.value.copy(totalDays = 30)
 
         testDispatcher.scheduler.advanceUntilIdle()
-        // Logic is max(1, total - passed). Passed > 30. Result 1.
-        assertEquals(1, viewModel.uiState.value.daysRemaining)
+        // Cycle rolls forward to Jan 31 (start + 30 days), so 5 days have passed in the new cycle.
+        // Remaining = 30 - 5 = 25.
+        assertEquals(25, viewModel.uiState.value.daysRemaining)
     }
 
     @Test
@@ -140,7 +136,7 @@ class DaysRemainingTest {
         setDate(today)
         backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
         setStartDate(start)
-        totalDaysFlow.value = 30
+        configFlow.value = configFlow.value.copy(totalDays = 30)
 
         testDispatcher.scheduler.advanceUntilIdle()
         
@@ -167,7 +163,7 @@ class DaysRemainingTest {
         setDate(today)
         backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
         setStartDate(start)
-        totalDaysFlow.value = 30
+        configFlow.value = configFlow.value.copy(totalDays = 30)
 
         testDispatcher.scheduler.advanceUntilIdle()
         

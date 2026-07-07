@@ -229,7 +229,7 @@ fun SettingsScreen(
                         onBack() // Go back after saving
                     }
                 },
-                enabled = isValid,
+                enabled = isValid && hasChanges,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = AppColors.Yellow,

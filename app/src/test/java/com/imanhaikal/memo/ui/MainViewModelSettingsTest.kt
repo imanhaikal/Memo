@@ -1,5 +1,6 @@
 package com.imanhaikal.memo.ui
 
+import com.imanhaikal.memo.data.BudgetConfig
 import com.imanhaikal.memo.data.BudgetPreferences
 import com.imanhaikal.memo.data.TransactionDao
 import io.mockk.coVerify
@@ -27,10 +28,7 @@ class MainViewModelSettingsTest {
 
     // Mock data flows
     private val transactionsFlow = MutableStateFlow(emptyList<com.imanhaikal.memo.data.Transaction>())
-    private val totalBudgetFlow = MutableStateFlow(0L)
-    private val cycleStartDateFlow = MutableStateFlow(0L)
-    private val totalDaysFlow = MutableStateFlow(30)
-    private val currencyFlow = MutableStateFlow("USD")
+    private val configFlow = MutableStateFlow(BudgetConfig(0L, 0L, 30, "USD"))
 
     @Before
     fun setup() {
@@ -39,10 +37,7 @@ class MainViewModelSettingsTest {
         budgetPreferences = mockk(relaxed = true)
 
         every { transactionDao.getAllTransactions() } returns transactionsFlow
-        every { budgetPreferences.totalBudget } returns totalBudgetFlow
-        every { budgetPreferences.cycleStartDate } returns cycleStartDateFlow
-        every { budgetPreferences.totalDays } returns totalDaysFlow
-        every { budgetPreferences.currency } returns currencyFlow
+        every { budgetPreferences.budgetConfig } returns configFlow
 
         viewModel = MainViewModel(transactionDao, budgetPreferences, Clock.systemDefaultZone())
     }

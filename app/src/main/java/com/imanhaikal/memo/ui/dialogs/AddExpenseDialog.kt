@@ -109,7 +109,11 @@ fun AddExpenseDialog(
                 // Amount Input
                 MemoInput(
                     value = amountText,
-                    onValueChange = { amountText = it },
+                    onValueChange = {
+                        if (it.all { char -> char.isDigit() || char == '.' }) {
+                            amountText = it
+                        }
+                    },
                     label = "Amount",
                     placeholder = "0.00",
                     keyboardOptions = KeyboardOptions(
