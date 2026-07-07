@@ -3,6 +3,7 @@ package com.imanhaikal.memo.ui
 import com.imanhaikal.memo.data.BudgetConfig
 import com.imanhaikal.memo.data.BudgetPreferences
 import com.imanhaikal.memo.data.TransactionDao
+import com.imanhaikal.memo.data.receipt.FakeReceiptScanner
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -39,7 +40,7 @@ class MainViewModelSettingsTest {
         every { transactionDao.getAllTransactions() } returns transactionsFlow
         every { budgetPreferences.budgetConfig } returns configFlow
 
-        viewModel = MainViewModel(transactionDao, budgetPreferences, Clock.systemDefaultZone())
+        viewModel = MainViewModel(transactionDao, budgetPreferences, Clock.systemDefaultZone(), FakeReceiptScanner())
     }
 
     @After

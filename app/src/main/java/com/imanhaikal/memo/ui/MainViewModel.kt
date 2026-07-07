@@ -1,5 +1,6 @@
 package com.imanhaikal.memo.ui
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -9,9 +10,14 @@ import com.imanhaikal.memo.MemoApplication
 import com.imanhaikal.memo.data.BudgetPreferences
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.data.TransactionDao
+import com.imanhaikal.memo.data.receipt.ReceiptScanner
+import com.imanhaikal.memo.data.receipt.ScanFailureReason
+import com.imanhaikal.memo.data.receipt.ScanOutcome
 import com.imanhaikal.memo.domain.BudgetCalculatorUseCase
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -19,6 +25,13 @@ import java.time.Clock
 
 enum class BudgetStatus {
     ON_TRACK, CAREFUL, OVER_LIMIT
+}
+
+sealed interface ScanState {
+    data object Idle : ScanState
+    data object Processing : ScanState
+    data class Success(val amountCents: Long, val note: String) : ScanState
+    data class Error(val reason: ScanFailureReason) : ScanState
 }
 
 data class BudgetUiState(
@@ -39,8 +52,14 @@ class MainViewModel(
     private val transactionDao: TransactionDao,
     private val budgetPreferences: BudgetPreferences,
     private val clock: Clock,
+    private val receiptScanner: ReceiptScanner,
     private val budgetCalculator: BudgetCalculatorUseCase = BudgetCalculatorUseCase(clock)
 ) : ViewModel() {
+
+    private val _scanState = MutableStateFlow<ScanState>(ScanState.Idle)
+    val scanState: StateFlow<ScanState> = _scanState.asStateFlow()
+
+    val isScanAvailable: Boolean get() = receiptScanner.isAvailable
 
     val uiState: StateFlow<BudgetUiState> = combine(
         transactionDao.getAllTransactions(),
@@ -87,6 +106,20 @@ class MainViewModel(
             transactionDao.insertTransaction(transaction)
         }
     }
+
+    fun scanReceipt(uri: Uri) {
+        viewModelScope.launch {
+            _scanState.value = ScanState.Processing
+            _scanState.value = when (val outcome = receiptScanner.scan(uri)) {
+                is ScanOutcome.Success -> ScanState.Success(outcome.amountCents, outcome.note)
+                is ScanOutcome.Failure -> ScanState.Error(outcome.reason)
+            }
+        }
+    }
+
+    fun clearScanState() {
+        _scanState.value = ScanState.Idle
+    }
     
     fun deleteTransaction(transaction: Transaction) {
         viewModelScope.launch {
@@ -110,7 +143,8 @@ class MainViewModel(
                 MainViewModel(
                     transactionDao = application.container.transactionDao,
                     budgetPreferences = application.container.budgetPreferences,
-                    clock = application.container.clock
+                    clock = application.container.clock,
+                    receiptScanner = application.container.receiptScanner
                 )
             }
         }

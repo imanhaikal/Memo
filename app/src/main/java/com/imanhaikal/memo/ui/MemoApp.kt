@@ -1,5 +1,11 @@
 package com.imanhaikal.memo.ui
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -9,29 +15,57 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.ui.components.MemoFab
+import com.imanhaikal.memo.ui.components.MemoScanFab
 import com.imanhaikal.memo.ui.dialogs.AddExpenseDialog
 import com.imanhaikal.memo.ui.dialogs.DeleteConfirmationDialog
+import com.imanhaikal.memo.ui.dialogs.ScanErrorDialog
+import com.imanhaikal.memo.ui.dialogs.ScanReceiptChooserDialog
+import com.imanhaikal.memo.ui.dialogs.ScanningReceiptDialog
 import com.imanhaikal.memo.ui.dialogs.SetupDialog
 import com.imanhaikal.memo.ui.screens.DashboardScreen
 import com.imanhaikal.memo.ui.screens.SettingsScreen
 import com.imanhaikal.memo.ui.theme.AppColors
+import com.imanhaikal.memo.utils.ImageUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @Composable
 fun MemoApp(
     viewModel: MainViewModel = viewModel(factory = MainViewModel.Factory)
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val scanState by viewModel.scanState.collectAsStateWithLifecycle()
     var showAddExpenseDialog by rememberSaveable { mutableStateOf(false) }
     var transactionToEditId by rememberSaveable { mutableStateOf<Int?>(null) }
     var transactionToDeleteId by rememberSaveable { mutableStateOf<Int?>(null) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showScanChooser by rememberSaveable { mutableStateOf(false) }
+    // Uri kept as String so it survives process death while the camera app is open
+    var cameraImageUriString by rememberSaveable { mutableStateOf<String?>(null) }
     val transactionToEdit = state.transactions.firstOrNull { it.id == transactionToEditId }
     val transactionToDelete = state.transactions.firstOrNull { it.id == transactionToDeleteId }
+
+    val context = LocalContext.current
+    val galleryLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        uri?.let(viewModel::scanReceipt)
+    }
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        val uri = cameraImageUriString?.let(Uri::parse)
+        if (success && uri != null) viewModel.scanReceipt(uri)
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -40,12 +74,25 @@ fun MemoApp(
         // Main Scaffold
         Scaffold(
             floatingActionButton = {
-                // Only show FAB if setup is complete and not in settings
+                // Only show FABs if setup is complete and not in settings
                 if (state.isSetup && !showSettings) {
-                    MemoFab(onClick = {
-                        transactionToEditId = null
-                        showAddExpenseDialog = true
-                    })
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (viewModel.isScanAvailable) {
+                            MemoScanFab(onClick = {
+                                viewModel.viewModelScope.launch(Dispatchers.IO) {
+                                    ImageUtils.purgeReceiptCaptures(context)
+                                }
+                                showScanChooser = true
+                            })
+                        }
+                        MemoFab(onClick = {
+                            transactionToEditId = null
+                            showAddExpenseDialog = true
+                        })
+                    }
                 }
             },
             containerColor = AppColors.Background
@@ -117,6 +164,51 @@ fun MemoApp(
                             transactionToEditId = null
                         }
                     )
+                }
+
+                if (showScanChooser) {
+                    ScanReceiptChooserDialog(
+                        onCamera = {
+                            showScanChooser = false
+                            val uri = ImageUtils.createReceiptCaptureUri(context)
+                            cameraImageUriString = uri.toString()
+                            cameraLauncher.launch(uri)
+                        },
+                        onGallery = {
+                            showScanChooser = false
+                            galleryLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                        onDismiss = { showScanChooser = false }
+                    )
+                }
+
+                when (val scan = scanState) {
+                    is ScanState.Processing -> ScanningReceiptDialog()
+                    is ScanState.Success -> AddExpenseDialog(
+                        initialAmountCents = scan.amountCents,
+                        initialNote = scan.note,
+                        onConfirm = { amount, note ->
+                            viewModel.addTransaction(amount, note)
+                            viewModel.clearScanState()
+                        },
+                        onDismiss = { viewModel.clearScanState() }
+                    )
+                    is ScanState.Error -> ScanErrorDialog(
+                        reason = scan.reason,
+                        onRetry = {
+                            viewModel.clearScanState()
+                            showScanChooser = true
+                        },
+                        onManual = {
+                            viewModel.clearScanState()
+                            transactionToEditId = null
+                            showAddExpenseDialog = true
+                        },
+                        onDismiss = { viewModel.clearScanState() }
+                    )
+                    is ScanState.Idle -> Unit
                 }
 
                 if (transactionToDelete != null) {

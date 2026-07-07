@@ -4,6 +4,7 @@ import com.imanhaikal.memo.data.BudgetConfig
 import com.imanhaikal.memo.data.BudgetPreferences
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.data.TransactionDao
+import com.imanhaikal.memo.data.receipt.FakeReceiptScanner
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -59,7 +60,7 @@ class MainViewModelTest {
         every { budgetPreferences.budgetConfig } returns configFlow
 
         clock = Clock.fixed(now, zoneId)
-        viewModel = MainViewModel(transactionDao, budgetPreferences, clock)
+        viewModel = MainViewModel(transactionDao, budgetPreferences, clock, FakeReceiptScanner())
     }
 
     @After

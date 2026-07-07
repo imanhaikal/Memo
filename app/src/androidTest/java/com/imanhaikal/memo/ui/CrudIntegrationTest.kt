@@ -32,7 +32,12 @@ class CrudIntegrationTest {
         context = InstrumentationRegistry.getInstrumentation().targetContext
         preferences = BudgetPreferences(context)
         transactionDao = FakeTransactionDao()
-        viewModel = MainViewModel(transactionDao, preferences, Clock.systemDefaultZone())
+        viewModel = MainViewModel(
+            transactionDao,
+            preferences,
+            Clock.systemDefaultZone(),
+            (context.applicationContext as com.imanhaikal.memo.MemoApplication).container.receiptScanner
+        )
 
         runBlocking {
             // Setup budget so we are on Dashboard

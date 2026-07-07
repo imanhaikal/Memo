@@ -54,12 +54,22 @@ import kotlinx.coroutines.launch
 @Composable
 fun AddExpenseDialog(
     transaction: Transaction? = null,
+    initialAmountCents: Long? = null,
+    initialNote: String? = null,
     onConfirm: (amountCents: Long, note: String) -> Unit,
     onDelete: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
-    var amountText by rememberSaveable(transaction?.id) { mutableStateOf(transaction?.amount?.let(CurrencyUtils::formatAmountInput) ?: "") }
-    var noteText by rememberSaveable(transaction?.id) { mutableStateOf(transaction?.note ?: "") }
+    var amountText by rememberSaveable(transaction?.id, initialAmountCents) {
+        mutableStateOf(
+            transaction?.amount?.let(CurrencyUtils::formatAmountInput)
+                ?: initialAmountCents?.let(CurrencyUtils::formatAmountInput)
+                ?: ""
+        )
+    }
+    var noteText by rememberSaveable(transaction?.id, initialNote) {
+        mutableStateOf(transaction?.note ?: initialNote ?: "")
+    }
     val amountCents = CurrencyUtils.parseAmountToCents(amountText)
 
     val scale = remember { Animatable(0.9f) }

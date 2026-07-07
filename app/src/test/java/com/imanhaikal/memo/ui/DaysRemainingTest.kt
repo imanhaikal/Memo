@@ -4,6 +4,7 @@ import com.imanhaikal.memo.data.BudgetConfig
 import com.imanhaikal.memo.data.BudgetPreferences
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.data.TransactionDao
+import com.imanhaikal.memo.data.receipt.FakeReceiptScanner
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -44,7 +45,7 @@ class DaysRemainingTest {
         every { transactionDao.getAllTransactions() } returns transactionsFlow
         every { budgetPreferences.budgetConfig } returns configFlow
 
-        viewModel = MainViewModel(transactionDao, budgetPreferences, Clock.systemDefaultZone())
+        viewModel = MainViewModel(transactionDao, budgetPreferences, Clock.systemDefaultZone(), FakeReceiptScanner())
     }
 
     @After
@@ -56,7 +57,8 @@ class DaysRemainingTest {
         viewModel = MainViewModel(
             transactionDao = transactionDao,
             budgetPreferences = budgetPreferences,
-            clock = Clock.fixed(date.atStartOfDay(zoneId).toInstant(), zoneId)
+            clock = Clock.fixed(date.atStartOfDay(zoneId).toInstant(), zoneId),
+            receiptScanner = FakeReceiptScanner()
         )
     }
 

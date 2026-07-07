@@ -4,6 +4,9 @@ import android.app.Application
 import com.imanhaikal.memo.data.AppDatabase
 import com.imanhaikal.memo.data.BudgetPreferences
 import com.imanhaikal.memo.data.TransactionDao
+import com.imanhaikal.memo.data.receipt.GeminiReceiptScanner
+import com.imanhaikal.memo.data.receipt.GeminiReceiptService
+import com.imanhaikal.memo.data.receipt.ReceiptScanner
 import java.time.Clock
 
 class MemoApplication : Application() {
@@ -21,6 +24,7 @@ interface AppContainer {
     val transactionDao: TransactionDao
     val budgetPreferences: BudgetPreferences
     val clock: Clock
+    val receiptScanner: ReceiptScanner
 }
 
 class DefaultAppContainer(private val context: Application) : AppContainer {
@@ -34,5 +38,12 @@ class DefaultAppContainer(private val context: Application) : AppContainer {
     
     override val clock: Clock by lazy {
         Clock.systemDefaultZone()
+    }
+
+    override val receiptScanner: ReceiptScanner by lazy {
+        GeminiReceiptScanner(
+            contentResolver = context.contentResolver,
+            service = GeminiReceiptService(apiKey = BuildConfig.GEMINI_API_KEY)
+        )
     }
 }
