@@ -102,9 +102,9 @@ class CrudIntegrationTest {
         }
         
         composeTestRule.onNodeWithText("Updated Item").assertIsDisplayed()
-        // Formatted amount check might depend on locale, but let's try strict check or partial
-        // $456.00 is typical US formatting
-        composeTestRule.onNodeWithText("$456.00").assertIsDisplayed()
+        // Format through the same utility the list uses (default currency is MYR)
+        val expectedAmount = com.imanhaikal.memo.utils.CurrencyUtils.formatCurrency(45_600L, "MYR")
+        composeTestRule.onNodeWithText(expectedAmount).assertIsDisplayed()
     }
 
     @Test
@@ -124,15 +124,12 @@ class CrudIntegrationTest {
         // The delete button in AddExpenseDialog has contentDescription "Delete"
         composeTestRule.onNodeWithContentDescription("Delete").performClick()
 
-        // Verify Confirmation Dialog
-        composeTestRule.onNodeWithText("Delete Transaction?").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Delete").performClick()
-
-        // Verify removal
+        // Deletes are immediate; the undo snackbar is the safety net
         composeTestRule.waitUntil {
             transactionDao.getTransactionsBlocking().none { it.note == note }
         }
         composeTestRule.onNodeWithText(note).assertDoesNotExist()
+        composeTestRule.onNodeWithText("Expense deleted").assertIsDisplayed()
     }
 
     @Test
@@ -150,15 +147,39 @@ class CrudIntegrationTest {
             swipeLeft()
         }
 
-        // Verify Confirmation Dialog
-        composeTestRule.onNodeWithText("Delete Transaction?").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Delete").performClick()
-
-        // Verify removal
+        // The swipe itself commits the delete — no confirmation dialog
         composeTestRule.waitUntil {
             transactionDao.getTransactionsBlocking().none { it.note == note }
         }
         composeTestRule.onNodeWithText(note).assertDoesNotExist()
+        composeTestRule.onNodeWithText("Expense deleted").assertIsDisplayed()
+    }
+
+    @Test
+    fun verifyUndoRestoresTransaction() {
+        val note = "Undo Me"
+        viewModel.addTransaction(4_200L, note)
+
+        composeTestRule.waitUntil {
+            transactionDao.getTransactionsBlocking().any { it.note == note }
+        }
+        composeTestRule.onNodeWithText(note).assertIsDisplayed()
+
+        composeTestRule.onNodeWithText(note).performTouchInput {
+            swipeLeft()
+        }
+
+        composeTestRule.waitUntil {
+            transactionDao.getTransactionsBlocking().none { it.note == note }
+        }
+
+        // Undo from the snackbar brings the row back with its original data
+        composeTestRule.onNodeWithText("Undo").performClick()
+
+        composeTestRule.waitUntil {
+            transactionDao.getTransactionsBlocking().any { it.note == note }
+        }
+        composeTestRule.onNodeWithText(note).assertIsDisplayed()
     }
 
     class FakeTransactionDao : TransactionDao {

@@ -81,18 +81,28 @@ fun TransactionItem(
     currencyCode: String = "MYR"
 ) {
     val currentOnDelete by rememberUpdatedState(onDelete)
+    val haptic = rememberStrongHaptics()
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = {
             if (it == SwipeToDismissBoxValue.EndToStart) {
+                // Delete immediately; the snackbar's Undo is the safety net
+                haptic.error()
                 currentOnDelete()
-                false
+                true
             } else {
                 false
             }
         }
     )
     val shape = RoundedCornerShape(16.dp)
-    val haptic = rememberStrongHaptics()
+
+    // The dismiss state is saveable and LazyColumn retains it per key, so a row
+    // restored via Undo would otherwise come back already swiped away
+    LaunchedEffect(Unit) {
+        if (dismissState.currentValue != SwipeToDismissBoxValue.Settled) {
+            dismissState.reset()
+        }
+    }
 
     // Tick when the swipe crosses the delete threshold, so the gesture has a physical detent
     LaunchedEffect(dismissState.targetValue) {

@@ -127,6 +127,13 @@ class MainViewModel(
         }
     }
 
+    fun restoreTransaction(transaction: Transaction) {
+        viewModelScope.launch {
+            // REPLACE insert with the original id/date puts it back exactly where it was
+            transactionDao.insertTransaction(transaction)
+        }
+    }
+
     fun resetBudget() {
         viewModelScope.launch {
             // Clear transactions

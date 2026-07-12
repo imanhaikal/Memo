@@ -43,6 +43,7 @@ import com.imanhaikal.memo.ui.components.springPress
 import com.imanhaikal.memo.ui.theme.AppColors
 import com.imanhaikal.memo.ui.theme.MemoTheme
 import com.imanhaikal.memo.utils.CurrencyUtils
+import com.imanhaikal.memo.utils.autoFocusOnceAttached
 import kotlinx.coroutines.launch
 
 @Composable
@@ -69,7 +70,6 @@ fun SetupDialog(
     }
 
     LaunchedEffect(Unit) {
-        amountFocusRequester.requestFocus()
         launch {
             scale.animateTo(
                 targetValue = 1f,
@@ -129,7 +129,7 @@ fun SetupDialog(
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .focusRequester(amountFocusRequester)
+                        .autoFocusOnceAttached(amountFocusRequester)
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
