@@ -90,12 +90,12 @@ class MainViewModel(
         }
     }
 
-    fun addTransaction(amountCents: Long, note: String) {
+    fun addTransaction(amountCents: Long, note: String, dateMillis: Long? = null) {
         viewModelScope.launch {
             val newTransaction = Transaction(
                 amount = amountCents,
                 note = note,
-                date = clock.millis()
+                date = dateMillis ?: clock.millis()
             )
             transactionDao.insertTransaction(newTransaction)
         }

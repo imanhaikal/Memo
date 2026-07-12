@@ -204,11 +204,17 @@ fun MemoApp(
                 if (showAddExpenseDialog) {
                     AddExpenseDialog(
                         transaction = transactionToEdit,
-                        onConfirm = { amount, note ->
+                        onConfirm = { amount, note, dateMillis ->
                             if (transactionToEdit != null) {
-                                viewModel.updateTransaction(transactionToEdit.copy(amount = amount, note = note))
+                                viewModel.updateTransaction(
+                                        transactionToEdit.copy(
+                                        amount = amount,
+                                        note = note,
+                                        date = dateMillis!!
+                                    )
+                                )
                             } else {
-                                viewModel.addTransaction(amount, note)
+                                viewModel.addTransaction(amount, note, dateMillis)
                             }
                             showAddExpenseDialog = false
                             transactionToEditId = null
@@ -250,8 +256,8 @@ fun MemoApp(
                     is ScanState.Success -> AddExpenseDialog(
                         initialAmountCents = scan.amountCents,
                         initialNote = scan.note,
-                        onConfirm = { amount, note ->
-                            viewModel.addTransaction(amount, note)
+                        onConfirm = { amount, note, dateMillis ->
+                            viewModel.addTransaction(amount, note, dateMillis)
                             viewModel.clearScanState()
                         },
                         onDismiss = { viewModel.clearScanState() }
