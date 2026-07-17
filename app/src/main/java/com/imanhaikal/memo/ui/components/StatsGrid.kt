@@ -33,7 +33,9 @@ fun StatsGrid(
                     value = dailyLimit,
                     style = MaterialTheme.typography.titleMedium,
                     color = AppColors.TextPrimary,
-                    currencyCode = currencyCode
+                    currencyCode = currencyCode,
+                    // The hero balance animates at the same time and owns the roll haptics
+                    hapticsEnabled = false
                 )
             },
             modifier = Modifier.weight(1f)

@@ -11,8 +11,8 @@ import androidx.compose.ui.platform.LocalContext
 
 /**
  * Tiered haptic vocabulary. Weight scales with the significance of the action:
- * [tick] for minor interactions, [click] for primary actions, and distinct
- * [success]/[error] signatures for outcomes.
+ * [roll] for repeated micro-feedback, [tick] for minor interactions, [click]
+ * for primary actions, and distinct [success]/[error] signatures for outcomes.
  */
 class StrongHaptics(context: Context) {
 
@@ -27,6 +27,24 @@ class StrongHaptics(context: Context) {
     /** Light tick: list-row taps, secondary buttons, selections, swipe thresholds. */
     @RequiresPermission(android.Manifest.permission.VIBRATE)
     fun tick() = predefined(VibrationEffect.EFFECT_TICK, fallbackMs = 15)
+
+    /** Faint tick for rolling number counters; soft enough to repeat every few frames. */
+    @RequiresPermission(android.Manifest.permission.VIBRATE)
+    fun roll() {
+        val v = vibrator ?: return
+        if (!v.hasVibrator()) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+            v.areAllPrimitivesSupported(VibrationEffect.Composition.PRIMITIVE_LOW_TICK)
+        ) {
+            v.vibrate(
+                VibrationEffect.startComposition()
+                    .addPrimitive(VibrationEffect.Composition.PRIMITIVE_LOW_TICK, 0.4f)
+                    .compose()
+            )
+        } else {
+            predefined(VibrationEffect.EFFECT_TICK, fallbackMs = 10)
+        }
+    }
 
     /** Standard click: FABs and primary/confirm buttons. */
     @RequiresPermission(android.Manifest.permission.VIBRATE)
