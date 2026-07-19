@@ -38,7 +38,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -76,21 +75,9 @@ fun SettingsScreen(
     var selectedCurrency by rememberSaveable { mutableStateOf(state.currencyCode) }
     var showCurrencyDropdown by rememberSaveable { mutableStateOf(false) }
     var showResetDialog by rememberSaveable { mutableStateOf(false) }
+    var showCurrencyChangeDialog by rememberSaveable { mutableStateOf(false) }
     val haptic = rememberStrongHaptics()
 
-    // Update inputs when state changes (e.g. initial load)
-    LaunchedEffect(state) {
-        // Only update if not already modified? No, typically sync with state on open.
-        // But if user is typing, we shouldn't overwrite.
-        // For simplicity, we assume state is stable while editing.
-        // To prevent overwriting while typing, we can just initialize once or check simple equality
-        if (CurrencyUtils.parseAmountToCents(budgetInput) == state.totalBudget && daysInput.toIntOrNull() == state.totalDays) {
-            // Already synced or initial state
-        } else {
-             // If state changes externally, we might want to update, but usually this is just initial.
-        }
-    }
-    
     // We'll initialize with state values.
     // Ideally we want to detect changes to enable the save button.
     val currentBudgetCents = CurrencyUtils.parseAmountToCents(budgetInput)
@@ -100,6 +87,16 @@ fun SettingsScreen(
                       (currentDays != null && currentDays != state.totalDays) ||
                       (selectedCurrency != state.currencyCode)
     val isValid = currentBudgetCents != null && currentDays != null && currentDays > 0
+
+    val performSave = {
+        val validBudgetCents = currentBudgetCents
+        val validDays = currentDays
+        if (validBudgetCents != null && validDays != null && validDays > 0) {
+            haptic.success()
+            onSave(validBudgetCents, validDays, selectedCurrency)
+            onBack() // Go back after saving
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -240,12 +237,13 @@ fun SettingsScreen(
             val saveInteraction = remember { MutableInteractionSource() }
             Button(
                 onClick = {
-                    val validBudgetCents = currentBudgetCents
-                    val validDays = currentDays
-                    if (validBudgetCents != null && validDays != null && validDays > 0) {
-                        haptic.success()
-                        onSave(validBudgetCents, validDays, selectedCurrency)
-                        onBack() // Go back after saving
+                    // Amounts are stored as plain numbers, so switching currency relabels
+                    // recorded expenses without converting them — confirm before doing that
+                    if (selectedCurrency != state.currencyCode && state.transactions.isNotEmpty()) {
+                        haptic.tick()
+                        showCurrencyChangeDialog = true
+                    } else {
+                        performSave()
                     }
                 },
                 enabled = isValid && hasChanges,
@@ -313,6 +311,39 @@ fun SettingsScreen(
                 )
             }
         }
+    }
+
+    if (showCurrencyChangeDialog) {
+        val oldLabel = CurrencyUtils.SUPPORTED_CURRENCIES[state.currencyCode] ?: state.currencyCode
+        val newLabel = CurrencyUtils.SUPPORTED_CURRENCIES[selectedCurrency] ?: selectedCurrency
+        AlertDialog(
+            onDismissRequest = { showCurrencyChangeDialog = false },
+            title = { Text(text = "Change Currency?") },
+            text = {
+                Text(
+                    text = "Your recorded expenses won't be converted. " +
+                        "Amounts entered in $oldLabel will simply be shown as $newLabel instead."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showCurrencyChangeDialog = false
+                        performSave()
+                    }
+                ) {
+                    Text("Change Anyway", color = AppColors.TextPrimary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCurrencyChangeDialog = false }) {
+                    Text("Cancel", color = AppColors.TextSecondary)
+                }
+            },
+            containerColor = Color.White,
+            titleContentColor = AppColors.TextPrimary,
+            textContentColor = AppColors.TextSecondary
+        )
     }
 
     if (showResetDialog) {

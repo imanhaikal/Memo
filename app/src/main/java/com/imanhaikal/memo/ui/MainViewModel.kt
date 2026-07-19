@@ -1,6 +1,7 @@
 package com.imanhaikal.memo.ui
 
 import android.net.Uri
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -8,17 +9,21 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.imanhaikal.memo.MemoApplication
 import com.imanhaikal.memo.data.BudgetPreferences
+import com.imanhaikal.memo.data.Category
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.data.TransactionDao
 import com.imanhaikal.memo.data.receipt.ReceiptScanner
 import com.imanhaikal.memo.data.receipt.ScanFailureReason
 import com.imanhaikal.memo.data.receipt.ScanOutcome
 import com.imanhaikal.memo.domain.BudgetCalculatorUseCase
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Clock
@@ -30,10 +35,17 @@ enum class BudgetStatus {
 sealed interface ScanState {
     data object Idle : ScanState
     data object Processing : ScanState
-    data class Success(val amountCents: Long, val note: String) : ScanState
+    data class Success(
+        val amountCents: Long,
+        val note: String,
+        val category: Category? = null,
+        val description: String = "",
+        val dateMillis: Long? = null
+    ) : ScanState
     data class Error(val reason: ScanFailureReason) : ScanState
 }
 
+@Immutable
 data class BudgetUiState(
     val isLoading: Boolean = true,
     val isSetup: Boolean = false,
@@ -53,7 +65,8 @@ class MainViewModel(
     private val budgetPreferences: BudgetPreferences,
     private val clock: Clock,
     private val receiptScanner: ReceiptScanner,
-    private val budgetCalculator: BudgetCalculatorUseCase = BudgetCalculatorUseCase(clock)
+    private val budgetCalculator: BudgetCalculatorUseCase = BudgetCalculatorUseCase(clock),
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) : ViewModel() {
 
     private val _scanState = MutableStateFlow<ScanState>(ScanState.Idle)
@@ -72,7 +85,9 @@ class MainViewModel(
             totalDays = config.totalDays,
             currencyCode = config.currencyCode
         )
-    }.stateIn(
+        // The calculation is O(n) over all transactions with per-item date
+        // conversions; keep it off the main thread.
+    }.flowOn(defaultDispatcher).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = BudgetUiState(isLoading = true)
@@ -90,12 +105,20 @@ class MainViewModel(
         }
     }
 
-    fun addTransaction(amountCents: Long, note: String, dateMillis: Long? = null) {
+    fun addTransaction(
+        amountCents: Long,
+        note: String,
+        dateMillis: Long? = null,
+        category: Category? = null,
+        description: String = ""
+    ) {
         viewModelScope.launch {
             val newTransaction = Transaction(
                 amount = amountCents,
                 note = note,
-                date = dateMillis ?: clock.millis()
+                date = dateMillis ?: clock.millis(),
+                category = category,
+                description = description
             )
             transactionDao.insertTransaction(newTransaction)
         }
@@ -111,7 +134,13 @@ class MainViewModel(
         viewModelScope.launch {
             _scanState.value = ScanState.Processing
             _scanState.value = when (val outcome = receiptScanner.scan(uri)) {
-                is ScanOutcome.Success -> ScanState.Success(outcome.amountCents, outcome.note)
+                is ScanOutcome.Success -> ScanState.Success(
+                    amountCents = outcome.amountCents,
+                    note = outcome.note,
+                    category = outcome.category,
+                    description = outcome.description,
+                    dateMillis = outcome.dateMillis
+                )
                 is ScanOutcome.Failure -> ScanState.Error(outcome.reason)
             }
         }

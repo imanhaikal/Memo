@@ -4,6 +4,7 @@ import android.net.Uri
 import app.cash.turbine.test
 import com.imanhaikal.memo.data.BudgetConfig
 import com.imanhaikal.memo.data.BudgetPreferences
+import com.imanhaikal.memo.data.Category
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.data.TransactionDao
 import com.imanhaikal.memo.data.receipt.FakeReceiptScanner
@@ -48,7 +49,7 @@ class MainViewModelScanTest {
         every { transactionDao.getAllTransactions() } returns transactionsFlow
         every { budgetPreferences.budgetConfig } returns configFlow
 
-        viewModel = MainViewModel(transactionDao, budgetPreferences, Clock.systemDefaultZone(), scanner)
+        viewModel = MainViewModel(transactionDao, budgetPreferences, Clock.systemDefaultZone(), scanner, defaultDispatcher = testDispatcher)
     }
 
     @After
@@ -81,6 +82,33 @@ class MainViewModelScanTest {
     }
 
     @Test
+    fun `scan success carries category, description and datetime through`() = runTest(testDispatcher.scheduler) {
+        scanner.outcome = ScanOutcome.Success(
+            amountCents = 1250L,
+            note = "Tesco",
+            category = Category.SHOPPING,
+            description = "Groceries and household items",
+            dateMillis = 1_752_000_000_000L
+        )
+
+        viewModel.scanState.test {
+            assertEquals(ScanState.Idle, awaitItem())
+            viewModel.scanReceipt(mockk<Uri>())
+            assertEquals(ScanState.Processing, awaitItem())
+            assertEquals(
+                ScanState.Success(
+                    amountCents = 1250L,
+                    note = "Tesco",
+                    category = Category.SHOPPING,
+                    description = "Groceries and household items",
+                    dateMillis = 1_752_000_000_000L
+                ),
+                awaitItem()
+            )
+        }
+    }
+
+    @Test
     fun `clearScanState resets to idle`() = runTest(testDispatcher.scheduler) {
         scanner.outcome = ScanOutcome.Success(500L, "KFC")
 
@@ -102,7 +130,8 @@ class MainViewModelScanTest {
             transactionDao,
             budgetPreferences,
             Clock.systemDefaultZone(),
-            FakeReceiptScanner(isAvailable = false)
+            FakeReceiptScanner(isAvailable = false),
+            defaultDispatcher = testDispatcher
         )
         assertFalse(unavailable.isScanAvailable)
     }

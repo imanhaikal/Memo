@@ -1,5 +1,6 @@
 package com.imanhaikal.memo.data.receipt
 
+import com.imanhaikal.memo.data.Category
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
@@ -61,12 +62,21 @@ data class GeminiCandidate(
 data class ReceiptExtraction(
     val total: String = "",
     val note: String = "",
-    val confidence: Double? = null
+    val confidence: Double? = null,
+    val category: String = "",
+    val description: String = "",
+    val datetime: String = ""
 )
 
 enum class ScanFailureReason { NETWORK, API_ERROR, PARSE, UNREADABLE }
 
 sealed interface ScanOutcome {
-    data class Success(val amountCents: Long, val note: String) : ScanOutcome
+    data class Success(
+        val amountCents: Long,
+        val note: String,
+        val category: Category? = null,
+        val description: String = "",
+        val dateMillis: Long? = null
+    ) : ScanOutcome
     data class Failure(val reason: ScanFailureReason) : ScanOutcome
 }

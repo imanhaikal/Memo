@@ -24,6 +24,23 @@ class StrongHaptics(context: Context) {
         context.getSystemService(Vibrator::class.java)
     }
 
+    // Capability queries go through binder IPC; cache them so [roll], which fires
+    // every ~60ms during counter animations, doesn't repeat them per tick.
+    private val hasVibrator: Boolean by lazy { vibrator?.hasVibrator() == true }
+
+    private val lowTickSupported: Boolean by lazy {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+            vibrator?.areAllPrimitivesSupported(VibrationEffect.Composition.PRIMITIVE_LOW_TICK) == true
+    }
+
+    private val successPrimitivesSupported: Boolean by lazy {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+            vibrator?.areAllPrimitivesSupported(
+                VibrationEffect.Composition.PRIMITIVE_QUICK_RISE,
+                VibrationEffect.Composition.PRIMITIVE_TICK
+            ) == true
+    }
+
     /** Light tick: list-row taps, secondary buttons, selections, swipe thresholds. */
     @RequiresPermission(android.Manifest.permission.VIBRATE)
     fun tick() = predefined(VibrationEffect.EFFECT_TICK, fallbackMs = 15)
@@ -32,10 +49,8 @@ class StrongHaptics(context: Context) {
     @RequiresPermission(android.Manifest.permission.VIBRATE)
     fun roll() {
         val v = vibrator ?: return
-        if (!v.hasVibrator()) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
-            v.areAllPrimitivesSupported(VibrationEffect.Composition.PRIMITIVE_LOW_TICK)
-        ) {
+        if (!hasVibrator) return
+        if (lowTickSupported) {
             v.vibrate(
                 VibrationEffect.startComposition()
                     .addPrimitive(VibrationEffect.Composition.PRIMITIVE_LOW_TICK, 0.4f)
@@ -54,13 +69,8 @@ class StrongHaptics(context: Context) {
     @RequiresPermission(android.Manifest.permission.VIBRATE)
     fun success() {
         val v = vibrator ?: return
-        if (!v.hasVibrator()) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
-            v.areAllPrimitivesSupported(
-                VibrationEffect.Composition.PRIMITIVE_QUICK_RISE,
-                VibrationEffect.Composition.PRIMITIVE_TICK
-            )
-        ) {
+        if (!hasVibrator) return
+        if (successPrimitivesSupported) {
             v.vibrate(
                 VibrationEffect.startComposition()
                     .addPrimitive(VibrationEffect.Composition.PRIMITIVE_QUICK_RISE, 0.6f)
@@ -76,14 +86,14 @@ class StrongHaptics(context: Context) {
     @RequiresPermission(android.Manifest.permission.VIBRATE)
     fun error() {
         val v = vibrator ?: return
-        if (!v.hasVibrator()) return
+        if (!hasVibrator) return
         v.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 40, 60, 40), -1))
     }
 
     @RequiresPermission(android.Manifest.permission.VIBRATE)
     private fun predefined(effect: Int, fallbackMs: Long) {
         val v = vibrator ?: return
-        if (!v.hasVibrator()) return
+        if (!hasVibrator) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             v.vibrate(VibrationEffect.createPredefined(effect))
         } else {

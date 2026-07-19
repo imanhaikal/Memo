@@ -67,7 +67,7 @@ class HapticsTest {
         composeTestRule.setContent {
             MemoTheme {
                 AddExpenseDialog(
-                    onConfirm = { _, _ -> confirmed = true },
+                    onConfirm = { _, _, _, _, _ -> confirmed = true },
                     onDismiss = {}
                 )
             }

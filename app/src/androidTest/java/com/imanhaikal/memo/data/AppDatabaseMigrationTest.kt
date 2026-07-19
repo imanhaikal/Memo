@@ -21,17 +21,8 @@ class AppDatabaseMigrationTest {
 
     @Test
     fun migrate1To2ConvertsDollarAmountsToCents() {
+        // createDatabase builds the v1 table from schemas/1.json
         helper.createDatabase(TEST_DB, 1).use { database ->
-            database.execSQL(
-                """
-                CREATE TABLE transactions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                    amount REAL NOT NULL,
-                    note TEXT NOT NULL,
-                    date INTEGER NOT NULL
-                )
-                """.trimIndent()
-            )
             database.execSQL(
                 "INSERT INTO transactions (id, amount, note, date) VALUES (1, 12.34, 'Lunch', 1700000000000)"
             )
@@ -42,6 +33,49 @@ class AppDatabaseMigrationTest {
             2,
             true,
             AppDatabase.MIGRATION_1_2,
+        ).use { database ->
+            database.assertMigratedAmount(1_234L)
+        }
+    }
+
+    @Test
+    fun migrate2To3AddsUncategorizedDefaults() {
+        helper.createDatabase(TEST_DB, 2).use { database ->
+            database.execSQL(
+                "INSERT INTO transactions (id, amount, note, date) VALUES (1, 1234, 'Lunch', 1700000000000)"
+            )
+        }
+
+        helper.runMigrationsAndValidate(
+            TEST_DB,
+            3,
+            true,
+            AppDatabase.MIGRATION_2_3,
+        ).use { database ->
+            database.query(
+                "SELECT category, description FROM transactions WHERE id = 1"
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertTrue(cursor.isNull(0))
+                assertEquals("", cursor.getString(1))
+            }
+        }
+    }
+
+    @Test
+    fun migrateAllTheWayFrom1() {
+        helper.createDatabase(TEST_DB, 1).use { database ->
+            database.execSQL(
+                "INSERT INTO transactions (id, amount, note, date) VALUES (1, 12.34, 'Lunch', 1700000000000)"
+            )
+        }
+
+        helper.runMigrationsAndValidate(
+            TEST_DB,
+            3,
+            true,
+            AppDatabase.MIGRATION_1_2,
+            AppDatabase.MIGRATION_2_3,
         ).use { database ->
             database.assertMigratedAmount(1_234L)
         }

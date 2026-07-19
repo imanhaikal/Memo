@@ -67,7 +67,9 @@ fun MemoApp(
     var showScanChooser by rememberSaveable { mutableStateOf(false) }
     // Uri kept as String so it survives process death while the camera app is open
     var cameraImageUriString by rememberSaveable { mutableStateOf<String?>(null) }
-    val transactionToEdit = state.transactions.firstOrNull { it.id == transactionToEditId }
+    val transactionToEdit = remember(transactionToEditId, state.transactions) {
+        state.transactions.firstOrNull { it.id == transactionToEditId }
+    }
 
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -204,17 +206,19 @@ fun MemoApp(
                 if (showAddExpenseDialog) {
                     AddExpenseDialog(
                         transaction = transactionToEdit,
-                        onConfirm = { amount, note, dateMillis ->
+                        onConfirm = { amount, note, dateMillis, category, description ->
                             if (transactionToEdit != null) {
                                 viewModel.updateTransaction(
                                         transactionToEdit.copy(
                                         amount = amount,
                                         note = note,
-                                        date = dateMillis!!
+                                        date = dateMillis!!,
+                                        category = category,
+                                        description = description
                                     )
                                 )
                             } else {
-                                viewModel.addTransaction(amount, note, dateMillis)
+                                viewModel.addTransaction(amount, note, dateMillis, category, description)
                             }
                             showAddExpenseDialog = false
                             transactionToEditId = null
@@ -256,8 +260,11 @@ fun MemoApp(
                     is ScanState.Success -> AddExpenseDialog(
                         initialAmountCents = scan.amountCents,
                         initialNote = scan.note,
-                        onConfirm = { amount, note, dateMillis ->
-                            viewModel.addTransaction(amount, note, dateMillis)
+                        initialCategory = scan.category,
+                        initialDescription = scan.description.ifBlank { null },
+                        initialDateMillis = scan.dateMillis,
+                        onConfirm = { amount, note, dateMillis, category, description ->
+                            viewModel.addTransaction(amount, note, dateMillis, category, description)
                             viewModel.clearScanState()
                         },
                         onDismiss = { viewModel.clearScanState() }

@@ -1,6 +1,7 @@
 package com.imanhaikal.memo.data.receipt
 
 import android.util.Log
+import com.imanhaikal.memo.data.Category
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.serialization.encodeToString
@@ -73,7 +74,13 @@ class GeminiReceiptService(
             return ScanOutcome.Failure(ScanFailureReason.UNREADABLE)
         }
 
-        return ScanOutcome.Success(amountCents, extraction.note.trim().take(60))
+        return ScanOutcome.Success(
+            amountCents = amountCents,
+            note = extraction.note.trim().take(60),
+            category = Category.fromId(extraction.category.trim().lowercase()),
+            description = extraction.description.trim().take(300),
+            dateMillis = ReceiptResponseParser.datetimeToEpochMillis(extraction.datetime)
+        )
     }
 
     private fun buildRequest(jpegBase64: String) = GeminiRequest(
@@ -103,6 +110,16 @@ class GeminiReceiptService(
             - note: a short label for this expense, preferably the merchant/store name
               (e.g. "Tesco", "Nasi Kandar Pelita"). Max 30 characters.
             - confidence: 0 to 1.
+            - category: the best-fitting expense category based on the merchant and items,
+              one of: food, transport, shopping, bills, entertainment, health, other.
+              Use "other" only when nothing else fits; omit the field if you cannot tell.
+            - description: a 1-2 sentence summary of what was purchased, mentioning
+              notable line items (e.g. "2x cappuccino, 1x croissant"). Max 200 characters.
+              Empty if unreadable.
+            - datetime: the transaction date and time printed on the receipt, formatted
+              exactly as "yyyy-MM-dd HH:mm" in 24-hour time (e.g. "2026-07-18 14:35").
+              If only the date is printed, return "yyyy-MM-dd". Empty if not printed
+              or unreadable. Never guess.
             Receipts are usually in Malaysian Ringgit (RM / MYR) but may be in other
             currencies; always return only the numeric amount.
             If the image is not a readable receipt, return total "0", note "" and confidence 0.
@@ -122,6 +139,21 @@ class GeminiReceiptService(
                 putJsonObject("confidence") {
                     put("type", "NUMBER")
                     put("description", "Extraction confidence from 0 to 1.")
+                }
+                putJsonObject("category") {
+                    put("type", "STRING")
+                    putJsonArray("enum") {
+                        Category.entries.forEach { add(it.id) }
+                    }
+                    put("description", "Best-fitting expense category. Omit if unknown.")
+                }
+                putJsonObject("description") {
+                    put("type", "STRING")
+                    put("description", "Short summary of purchased items, max 200 chars. Empty if unreadable.")
+                }
+                putJsonObject("datetime") {
+                    put("type", "STRING")
+                    put("description", "Receipt date/time as \"yyyy-MM-dd HH:mm\" (24h) or \"yyyy-MM-dd\". Empty if not printed.")
                 }
             }
             putJsonArray("required") {

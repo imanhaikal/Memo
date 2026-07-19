@@ -60,7 +60,7 @@ class ContinuousAmortizationTest {
         every { budgetPreferences.budgetConfig } returns configFlow
 
         clock = Clock.fixed(now, zoneId)
-        viewModel = MainViewModel(transactionDao, budgetPreferences, clock, FakeReceiptScanner())
+        viewModel = MainViewModel(transactionDao, budgetPreferences, clock, FakeReceiptScanner(), defaultDispatcher = testDispatcher)
     }
 
     @After

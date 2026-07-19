@@ -44,9 +44,35 @@ import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.ui.theme.AppColors
 import com.imanhaikal.memo.utils.rememberStrongHaptics
 import com.imanhaikal.memo.utils.CurrencyUtils
+import com.imanhaikal.memo.utils.DateLabels
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+
+/** A day's worth of transactions for the grouped dashboard list. */
+data class DayGroup(
+    val date: LocalDate,
+    val label: String,
+    val totalCents: Long,
+    val transactions: List<Transaction>
+)
+
+/** Groups date-DESC transactions into per-day sections, preserving order. */
+fun groupTransactionsByDay(
+    transactions: List<Transaction>,
+    zone: ZoneId = ZoneId.systemDefault(),
+    today: LocalDate = LocalDate.now(zone)
+): List<DayGroup> =
+    transactions
+        .groupBy { Instant.ofEpochMilli(it.date).atZone(zone).toLocalDate() }
+        .map { (date, dayTransactions) ->
+            DayGroup(
+                date = date,
+                label = DateLabels.relativeDayLabel(date, today),
+                totalCents = dayTransactions.sumOf { it.amount },
+                transactions = dayTransactions
+            )
+        }
 
 @Composable
 fun TransactionList(
@@ -181,27 +207,27 @@ fun TransactionItem(
                             color = AppColors.TextPrimary
                         )
                         
-                        val dateStr = try {
-                            val instant = Instant.ofEpochMilli(transaction.date)
-                            val formatter = DateTimeFormatter.ofPattern("MMM d, h:mm a")
-                                .withZone(ZoneId.systemDefault())
-                            formatter.format(instant)
-                        } catch (e: Exception) {
-                            ""
+                        // The list groups rows under day headers, so each row only needs
+                        // its time — prefixed with the category when one is set
+                        val detailStr = remember(transaction.date, transaction.category) {
+                            listOfNotNull(
+                                transaction.category?.label,
+                                DateLabels.timeLabel(transaction.date)
+                            ).joinToString(" · ")
                         }
 
-                        if (dateStr.isNotEmpty()) {
-                            Text(
-                                text = dateStr,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = AppColors.TextTertiary
-                            )
-                        }
+                        Text(
+                            text = detailStr,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AppColors.TextTertiary
+                        )
                     }
 
                     Spacer(modifier = Modifier.width(16.dp))
 
-                    val formattedAmount = CurrencyUtils.formatCurrency(transaction.amount, currencyCode)
+                    val formattedAmount = remember(transaction.amount, currencyCode) {
+                        CurrencyUtils.formatCurrency(transaction.amount, currencyCode)
+                    }
                     Text(
                         text = formattedAmount,
                         style = MaterialTheme.typography.titleMedium,

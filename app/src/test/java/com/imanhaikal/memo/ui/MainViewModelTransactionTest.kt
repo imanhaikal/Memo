@@ -2,6 +2,7 @@ package com.imanhaikal.memo.ui
 
 import com.imanhaikal.memo.data.BudgetConfig
 import com.imanhaikal.memo.data.BudgetPreferences
+import com.imanhaikal.memo.data.Category
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.data.TransactionDao
 import com.imanhaikal.memo.data.receipt.FakeReceiptScanner
@@ -19,6 +20,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import java.time.Clock
@@ -51,7 +53,7 @@ class MainViewModelTransactionTest {
         every { budgetPreferences.budgetConfig } returns configFlow
         coEvery { transactionDao.insertTransaction(capture(insertedTransaction)) } returns Unit
 
-        viewModel = MainViewModel(transactionDao, budgetPreferences, fixedClock, FakeReceiptScanner())
+        viewModel = MainViewModel(transactionDao, budgetPreferences, fixedClock, FakeReceiptScanner(), defaultDispatcher = testDispatcher)
     }
 
     @After
@@ -76,5 +78,28 @@ class MainViewModelTransactionTest {
         advanceUntilIdle()
 
         assertEquals(yesterday, insertedTransaction.captured.date)
+    }
+
+    @Test
+    fun `addTransaction defaults to uncategorized with empty description`() = runTest(testDispatcher.scheduler) {
+        viewModel.addTransaction(1250L, "Lunch")
+        advanceUntilIdle()
+
+        assertNull(insertedTransaction.captured.category)
+        assertEquals("", insertedTransaction.captured.description)
+    }
+
+    @Test
+    fun `addTransaction persists category and description`() = runTest(testDispatcher.scheduler) {
+        viewModel.addTransaction(
+            1250L,
+            "Lunch",
+            category = Category.FOOD,
+            description = "Nasi lemak and teh tarik"
+        )
+        advanceUntilIdle()
+
+        assertEquals(Category.FOOD, insertedTransaction.captured.category)
+        assertEquals("Nasi lemak and teh tarik", insertedTransaction.captured.description)
     }
 }

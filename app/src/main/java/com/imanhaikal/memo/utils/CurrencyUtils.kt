@@ -17,24 +17,35 @@ object CurrencyUtils {
         "JPY" to "¥ (JPY)"
     )
 
-    fun formatCurrency(amountCents: Long, code: String): String {
-        val format = NumberFormat.getCurrencyInstance(Locale.US)
-        try {
-            val currency = Currency.getInstance(code)
-            format.currency = currency
-            
-            // Custom symbol override for MYR to ensure "RM" is used instead of "MYR"
-            if (code == "MYR") {
-                val symbols = (format as DecimalFormat).decimalFormatSymbols
-                symbols.currencySymbol = "RM"
-                format.decimalFormatSymbols = symbols
-            }
-        } catch (e: Exception) {
-            // Fallback to USD/Default if code is invalid
-        }
-        
-        return format.format(amountCents / 100.0)
+    // NumberFormat construction is expensive and formatCurrency runs per list row
+    // and per animation frame. We use ThreadLocal to ensure zero lock contention
+    // while guaranteeing that every thread gets its own safe instance of NumberFormat,
+    // since NumberFormat is not thread-safe in Java.
+    private val formatterCache = object : ThreadLocal<MutableMap<String, NumberFormat>>() {
+        override fun initialValue() = mutableMapOf<String, NumberFormat>()
     }
+
+    private fun formatterFor(code: String): NumberFormat =
+        formatterCache.get()!!.getOrPut(code) {
+            val format = NumberFormat.getCurrencyInstance(Locale.US)
+            try {
+                val currency = Currency.getInstance(code)
+                format.currency = currency
+
+                // Custom symbol override for MYR to ensure "RM" is used instead of "MYR"
+                if (code == "MYR") {
+                    val symbols = (format as DecimalFormat).decimalFormatSymbols
+                    symbols.currencySymbol = "RM"
+                    format.decimalFormatSymbols = symbols
+                }
+            } catch (e: Exception) {
+                // Fallback to USD/Default if code is invalid
+            }
+            format
+        }
+
+    fun formatCurrency(amountCents: Long, code: String): String =
+        formatterFor(code).format(amountCents / 100.0)
 
     fun parseAmountToCents(input: String): Long? {
         val normalized = input.trim()

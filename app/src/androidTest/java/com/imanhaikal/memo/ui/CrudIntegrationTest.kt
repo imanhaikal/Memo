@@ -102,9 +102,10 @@ class CrudIntegrationTest {
         }
         
         composeTestRule.onNodeWithText("Updated Item").assertIsDisplayed()
-        // Format through the same utility the list uses (default currency is MYR)
+        // Format through the same utility the list uses (default currency is MYR).
+        // Both the day-group header total and the row show the amount, so match all.
         val expectedAmount = com.imanhaikal.memo.utils.CurrencyUtils.formatCurrency(45_600L, "MYR")
-        composeTestRule.onNodeWithText(expectedAmount).assertIsDisplayed()
+        composeTestRule.onAllNodesWithText(expectedAmount).onFirst().assertIsDisplayed()
     }
 
     @Test

@@ -40,7 +40,9 @@ import com.imanhaikal.memo.ui.components.HeroSection
 import com.imanhaikal.memo.ui.components.MemoCard
 import com.imanhaikal.memo.ui.components.StatsGrid
 import com.imanhaikal.memo.ui.components.TransactionItem
+import com.imanhaikal.memo.ui.components.groupTransactionsByDay
 import com.imanhaikal.memo.ui.theme.AppColors
+import com.imanhaikal.memo.utils.CurrencyUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -60,6 +62,7 @@ fun DashboardScreen(
         entrancePlayed = true
     }
     val playEntrance = !entrancePlayed
+    val dayGroups = remember(state.transactions) { groupTransactionsByDay(state.transactions) }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -131,19 +134,46 @@ fun DashboardScreen(
                 }
             }
 
-            items(
-                items = state.transactions,
-                key = { it.id }
-            ) { transaction ->
-                TransactionItem(
-                    transaction = transaction,
-                    onClick = { onEditTransaction(transaction) },
-                    onDelete = { onDeleteTransaction(transaction) },
-                    currencyCode = state.currencyCode,
-                    modifier = Modifier
-                        .padding(horizontal = 16.dp)
-                        .animateItem()
-                )
+            dayGroups.forEach { group ->
+                item(key = "day-${group.date}", contentType = "day-header") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp)
+                            .padding(top = 8.dp)
+                            .animateItem(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = group.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AppColors.TextSecondary
+                        )
+                        Text(
+                            text = remember(group.totalCents, state.currencyCode) {
+                                CurrencyUtils.formatCurrency(group.totalCents, state.currencyCode)
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AppColors.TextTertiary
+                        )
+                    }
+                }
+                items(
+                    items = group.transactions,
+                    key = { it.id },
+                    contentType = { "transaction" }
+                ) { transaction ->
+                    TransactionItem(
+                        transaction = transaction,
+                        onClick = { onEditTransaction(transaction) },
+                        onDelete = { onDeleteTransaction(transaction) },
+                        currencyCode = state.currencyCode,
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .animateItem()
+                    )
+                }
             }
         } else {
             item {

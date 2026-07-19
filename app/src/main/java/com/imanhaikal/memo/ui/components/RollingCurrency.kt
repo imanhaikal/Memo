@@ -7,6 +7,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -57,8 +59,12 @@ fun RollingCurrency(
         }
     }
 
+    // Only frames where the displayed cents actually change recompose the Text;
+    // reading animatedValue.value directly would recompose every spring frame.
+    val displayedCents by remember { derivedStateOf { animatedValue.value.toLong() } }
+
     Text(
-        text = CurrencyUtils.formatCurrency(animatedValue.value.toLong(), currencyCode),
+        text = CurrencyUtils.formatCurrency(displayedCents, currencyCode),
         style = style,
         color = color,
         modifier = modifier

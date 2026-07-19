@@ -45,7 +45,7 @@ class DaysRemainingTest {
         every { transactionDao.getAllTransactions() } returns transactionsFlow
         every { budgetPreferences.budgetConfig } returns configFlow
 
-        viewModel = MainViewModel(transactionDao, budgetPreferences, Clock.systemDefaultZone(), FakeReceiptScanner())
+        viewModel = MainViewModel(transactionDao, budgetPreferences, Clock.systemDefaultZone(), FakeReceiptScanner(), defaultDispatcher = testDispatcher)
     }
 
     @After
@@ -58,7 +58,8 @@ class DaysRemainingTest {
             transactionDao = transactionDao,
             budgetPreferences = budgetPreferences,
             clock = Clock.fixed(date.atStartOfDay(zoneId).toInstant(), zoneId),
-            receiptScanner = FakeReceiptScanner()
+            receiptScanner = FakeReceiptScanner(),
+            defaultDispatcher = testDispatcher
         )
     }
 

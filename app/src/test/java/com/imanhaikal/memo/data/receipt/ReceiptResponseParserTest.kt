@@ -4,6 +4,8 @@ import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import java.time.ZoneId
+import java.time.ZonedDateTime
 
 class ReceiptResponseParserTest {
 
@@ -134,5 +136,62 @@ class ReceiptResponseParserTest {
     @Test
     fun `negative total is null`() {
         assertNull(ReceiptResponseParser.totalToCents("-5.00"))
+    }
+
+    // --- datetimeToEpochMillis ---
+
+    private val zone = ZoneId.of("Asia/Kuala_Lumpur")
+
+    // 2026-07-19 12:00 in Asia/Kuala_Lumpur
+    private val nowMillis = ZonedDateTime.of(2026, 7, 19, 12, 0, 0, 0, zone).toInstant().toEpochMilli()
+
+    private fun parse(raw: String): Long? =
+        ReceiptResponseParser.datetimeToEpochMillis(raw, zone, nowMillis)
+
+    @Test
+    fun `parses receipt datetime format`() {
+        val expected = ZonedDateTime.of(2026, 7, 18, 14, 35, 0, 0, zone).toInstant().toEpochMilli()
+        assertEquals(expected, parse("2026-07-18 14:35"))
+    }
+
+    @Test
+    fun `parses iso 8601 datetime`() {
+        val expected = ZonedDateTime.of(2026, 7, 18, 14, 35, 0, 0, zone).toInstant().toEpochMilli()
+        assertEquals(expected, parse("2026-07-18T14:35:00"))
+    }
+
+    @Test
+    fun `date-only lands at noon`() {
+        val expected = ZonedDateTime.of(2026, 7, 18, 12, 0, 0, 0, zone).toInstant().toEpochMilli()
+        assertEquals(expected, parse("2026-07-18"))
+    }
+
+    @Test
+    fun `empty datetime is null`() {
+        assertNull(parse(""))
+        assertNull(parse("   "))
+    }
+
+    @Test
+    fun `garbage datetime is null`() {
+        assertNull(parse("not a date"))
+        assertNull(parse("18/07/2026 2:35 PM"))
+    }
+
+    @Test
+    fun `future datetime is rejected`() {
+        assertNull(parse("2026-07-19 12:01"))
+        assertNull(parse("2027-01-01 10:00"))
+    }
+
+    @Test
+    fun `implausibly old datetime is rejected`() {
+        assertNull(parse("2019-07-18 14:35"))
+    }
+
+    @Test
+    fun `recent past datetime within same day is accepted`() {
+        val expected = ZonedDateTime.of(2026, 7, 19, 9, 15, 0, 0, zone).toInstant().toEpochMilli()
+        assertEquals(expected, parse("2026-07-19 09:15"))
     }
 }

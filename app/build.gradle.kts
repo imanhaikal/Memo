@@ -43,6 +43,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Debug keystore so release builds are installable for local
+            // performance testing. Replace with a real keystore before
+            // distributing (e.g. Play Store).
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
@@ -58,6 +62,10 @@ android {
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
+    }
+    sourceSets {
+        // Exported Room schemas, so MigrationTestHelper can load historical versions
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
     }
 }
 

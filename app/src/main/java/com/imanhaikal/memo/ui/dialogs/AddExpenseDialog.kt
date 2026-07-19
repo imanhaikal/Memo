@@ -1,20 +1,35 @@
 package com.imanhaikal.memo.ui.dialogs
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imeNestedScroll
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DatePicker
@@ -25,8 +40,11 @@ import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
 import com.imanhaikal.memo.ui.components.MemoInput
+import com.imanhaikal.memo.data.Category
 import com.imanhaikal.memo.data.Transaction
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +53,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
@@ -48,10 +67,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import com.imanhaikal.memo.utils.rememberStrongHaptics
@@ -59,26 +81,32 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.imanhaikal.memo.R
 import com.imanhaikal.memo.ui.components.PressScale
+import com.imanhaikal.memo.ui.components.iconRes
 import com.imanhaikal.memo.ui.components.springPress
 import com.imanhaikal.memo.ui.theme.AppColors
 import com.imanhaikal.memo.ui.theme.MemoTheme
 import com.imanhaikal.memo.utils.CurrencyUtils
+import com.imanhaikal.memo.utils.DateLabels
 import com.imanhaikal.memo.utils.autoFocusOnceAttached
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AddExpenseDialog(
     transaction: Transaction? = null,
     initialAmountCents: Long? = null,
     initialNote: String? = null,
-    onConfirm: (amountCents: Long, note: String, dateMillis: Long?) -> Unit,
+    initialCategory: Category? = null,
+    initialDescription: String? = null,
+    initialDateMillis: Long? = null,
+    onConfirm: (amountCents: Long, note: String, dateMillis: Long?, category: Category?, description: String) -> Unit,
     onDelete: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
@@ -93,10 +121,24 @@ fun AddExpenseDialog(
         mutableStateOf(transaction?.note ?: initialNote ?: "")
     }
     // null = untouched "Today"; the ViewModel stamps clock.millis() at submit time.
-    var selectedDateMillis by rememberSaveable(transaction?.id) {
-        mutableStateOf(transaction?.date)
+    var selectedDateMillis by rememberSaveable(transaction?.id, initialDateMillis) {
+        mutableStateOf(transaction?.date ?: initialDateMillis)
+    }
+    var selectedCategory by rememberSaveable(transaction?.id, initialCategory) {
+        mutableStateOf(transaction?.category ?: initialCategory)
+    }
+    var descriptionText by rememberSaveable(transaction?.id, initialDescription) {
+        mutableStateOf(transaction?.description?.ifBlank { null } ?: initialDescription ?: "")
+    }
+    // Open with details visible whenever there is already something in them
+    var detailsExpanded by rememberSaveable(transaction?.id, initialCategory, initialDescription) {
+        mutableStateOf(
+            (transaction?.category ?: initialCategory) != null ||
+                !(transaction?.description?.ifBlank { null } ?: initialDescription).isNullOrBlank()
+        )
     }
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
+    var showTimePicker by rememberSaveable { mutableStateOf(false) }
     val amountCents = CurrencyUtils.parseAmountToCents(amountText)
 
     val scale = remember { Animatable(0.9f) }
@@ -107,7 +149,7 @@ fun AddExpenseDialog(
     val submit = {
         if (amountCents != null) {
             haptic.success()
-            onConfirm(amountCents, noteText, selectedDateMillis)
+            onConfirm(amountCents, noteText, selectedDateMillis, selectedCategory, descriptionText.trim())
         }
     }
 
@@ -129,18 +171,36 @@ fun AddExpenseDialog(
         }
     }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        // The dialog's own window must not fit system windows, otherwise IME insets read as 0
+        // inside it and the card can never move out from under the keyboard.
+        properties = DialogProperties(decorFitsSystemWindows = false)
+    ) {
+        // Must be read inside the Dialog: its window hosts a separate focus owner,
+        // and the activity's FocusManager cannot clear focus in here.
+        val focusManager = LocalFocusManager.current
         Surface(
             shape = RoundedCornerShape(32.dp),
             color = AppColors.Surface,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
+                .systemBarsPadding()
+                .imePadding()
                 .scale(scale.value)
                 .alpha(alpha.value)
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier
+                    // Tapping non-interactive card area clears focus, hiding the keyboard;
+                    // children (fields, chips, buttons) consume their own taps first.
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { focusManager.clearFocus() })
+                    }
+                    .padding(24.dp)
+                    .imeNestedScroll()
+                    .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
@@ -188,14 +248,99 @@ fun AddExpenseDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Row(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     DateChip(
-                        label = dateChipLabel(selectedDateMillis),
+                        icon = { tint ->
+                            Icon(
+                                imageVector = Icons.Default.DateRange,
+                                contentDescription = "Change date",
+                                tint = tint,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        },
+                        label = selectedDateMillis
+                            ?.let { DateLabels.relativeDayLabel(toLocalDate(it)) }
+                            ?: "Today",
                         onClick = {
                             haptic.tick()
                             showDatePicker = true
                         }
                     )
+                    DateChip(
+                        icon = { tint ->
+                            Icon(
+                                painter = painterResource(R.drawable.ic_clock),
+                                contentDescription = "Change time",
+                                tint = tint,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        },
+                        label = selectedDateMillis?.let(DateLabels::timeLabel) ?: "Now",
+                        onClick = {
+                            haptic.tick()
+                            showTimePicker = true
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                DetailsToggle(
+                    expanded = detailsExpanded,
+                    hasDetails = selectedCategory != null || descriptionText.isNotBlank(),
+                    onClick = {
+                        haptic.tick()
+                        if (detailsExpanded) focusManager.clearFocus()
+                        detailsExpanded = !detailsExpanded
+                    }
+                )
+
+                AnimatedVisibility(
+                    visible = detailsExpanded,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Category.entries.forEach { category ->
+                                CategoryChip(
+                                    category = category,
+                                    selected = category == selectedCategory,
+                                    onClick = {
+                                        haptic.tick()
+                                        // Tapping the selected chip clears it (uncategorized)
+                                        selectedCategory =
+                                            if (selectedCategory == category) null else category
+                                    }
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        MemoInput(
+                            value = descriptionText,
+                            onValueChange = { descriptionText = it },
+                            label = "Description",
+                            placeholder = "Add more details…",
+                            singleLine = false,
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.Sentences
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 96.dp)
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -283,7 +428,8 @@ fun AddExpenseDialog(
                 TextButton(
                     onClick = {
                         datePickerState.selectedDateMillis?.let { utcMillis ->
-                            selectedDateMillis = combinePickedDayWithTime(utcMillis, selectedDateMillis)
+                            selectedDateMillis =
+                                DateLabels.combinePickedDayWithTime(utcMillis, selectedDateMillis)
                         }
                         showDatePicker = false
                     },
@@ -301,10 +447,56 @@ fun AddExpenseDialog(
             DatePicker(state = datePickerState, showModeToggle = false)
         }
     }
+
+    if (showTimePicker) {
+        val zone = ZoneId.systemDefault()
+        val initialTime = Instant.ofEpochMilli(selectedDateMillis ?: System.currentTimeMillis())
+            .atZone(zone).toLocalTime()
+        val timePickerState = rememberTimePickerState(
+            initialHour = initialTime.hour,
+            initialMinute = initialTime.minute
+        )
+        // material3 1.3.x has no TimePickerDialog; wrap TimePicker to match DatePickerDialog styling
+        Dialog(onDismissRequest = { showTimePicker = false }) {
+            Surface(
+                shape = RoundedCornerShape(32.dp),
+                color = AppColors.Surface
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    TimePicker(state = timePickerState)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = { showTimePicker = false }) {
+                            Text("Cancel", color = AppColors.TextSecondary)
+                        }
+                        TextButton(onClick = {
+                            selectedDateMillis = DateLabels.combineDateWithPickedTime(
+                                timePickerState.hour,
+                                timePickerState.minute,
+                                selectedDateMillis
+                            )
+                            showTimePicker = false
+                        }) {
+                            Text("OK", color = AppColors.TextPrimary)
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
-private fun DateChip(label: String, onClick: () -> Unit) {
+private fun DateChip(
+    icon: @Composable (tint: Color) -> Unit,
+    label: String,
+    onClick: () -> Unit
+) {
     val interaction = remember { MutableInteractionSource() }
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -315,12 +507,7 @@ private fun DateChip(label: String, onClick: () -> Unit) {
             .background(Color(0xFFF5F5F5))
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
-        Icon(
-            imageVector = Icons.Default.DateRange,
-            contentDescription = "Change date",
-            tint = AppColors.TextSecondary,
-            modifier = Modifier.size(16.dp)
-        )
+        icon(AppColors.TextSecondary)
         Spacer(modifier = Modifier.width(6.dp))
         Text(
             text = label,
@@ -330,39 +517,84 @@ private fun DateChip(label: String, onClick: () -> Unit) {
     }
 }
 
-private fun dateChipLabel(dateMillis: Long?): String {
-    val zone = ZoneId.systemDefault()
-    val today = LocalDate.now(zone)
-    val date = dateMillis
-        ?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate() }
-        ?: return "Today"
-    return when (date) {
-        today -> "Today"
-        today.minusDays(1) -> "Yesterday"
-        else -> {
-            val pattern = if (date.year == today.year) "MMM d" else "MMM d, yyyy"
-            date.format(DateTimeFormatter.ofPattern(pattern))
-        }
+@Composable
+private fun DetailsToggle(
+    expanded: Boolean,
+    hasDetails: Boolean,
+    onClick: () -> Unit
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        label = "detailsChevron"
+    )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .springPress(interaction)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+        Text(
+            text = when {
+                expanded -> "Hide details"
+                hasDetails -> "Show details"
+                else -> "Add details"
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = AppColors.TextSecondary
+        )
+        Icon(
+            imageVector = Icons.Default.KeyboardArrowDown,
+            contentDescription = null,
+            tint = AppColors.TextSecondary,
+            modifier = Modifier
+                .size(18.dp)
+                .rotate(chevronRotation)
+        )
     }
 }
 
-/**
- * The picker reports the chosen day as UTC midnight. Re-anchor that day in the local
- * zone, keeping the time-of-day of the value being replaced (or now, if untouched) so
- * transactions sort and display with a meaningful time.
- */
-private fun combinePickedDayWithTime(pickedUtcMillis: Long, previousMillis: Long?): Long {
-    val zone = ZoneId.systemDefault()
-    val pickedDay = Instant.ofEpochMilli(pickedUtcMillis).atZone(ZoneOffset.UTC).toLocalDate()
-    val timeOfDay = Instant.ofEpochMilli(previousMillis ?: System.currentTimeMillis())
-        .atZone(zone).toLocalTime()
-    return pickedDay.atTime(timeOfDay).atZone(zone).toInstant().toEpochMilli()
+@Composable
+private fun CategoryChip(
+    category: Category,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val background = if (selected) AppColors.Yellow else Color(0xFFF5F5F5)
+    val contentColor = if (selected) AppColors.TextPrimary else AppColors.TextSecondary
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .springPress(interaction, pressedScale = PressScale.Surface)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .clip(RoundedCornerShape(50))
+            .background(background)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Icon(
+            painter = painterResource(category.iconRes),
+            contentDescription = null,
+            tint = contentColor,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = category.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = AppColors.TextPrimary
+        )
+    }
 }
+
+private fun toLocalDate(millis: Long): LocalDate =
+    Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate()
 
 @Preview
 @Composable
 fun AddExpenseDialogPreview() {
     MemoTheme {
-        AddExpenseDialog(onConfirm = { _, _, _ -> }, onDismiss = {})
+        AddExpenseDialog(onConfirm = { _, _, _, _, _ -> }, onDismiss = {})
     }
 }
