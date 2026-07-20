@@ -47,6 +47,12 @@ sealed interface ScanState {
 }
 
 @Immutable
+/** Total spent in the active cycle for one category; null category = uncategorized. */
+data class CategoryTotal(
+    val category: Category?,
+    val totalCents: Long
+)
+
 data class BudgetUiState(
     val isLoading: Boolean = true,
     val isSetup: Boolean = false,
@@ -57,6 +63,8 @@ data class BudgetUiState(
     val status: BudgetStatus = BudgetStatus.ON_TRACK,
     val totalBudget: Long = 0L,
     val spentToday: Long = 0L,
+    val spentThisCycle: Long = 0L,
+    val categoryTotals: List<CategoryTotal> = emptyList(),
     val totalDays: Int = 30,
     val currencyCode: String = "MYR"
 )
@@ -72,6 +80,7 @@ class MainViewModel(
 
     private val _scanState = MutableStateFlow<ScanState>(ScanState.Idle)
     val scanState: StateFlow<ScanState> = _scanState.asStateFlow()
+    private var scanJob: kotlinx.coroutines.Job? = null
 
     val isScanAvailable: Boolean get() = receiptScanner.isAvailable
 
@@ -134,7 +143,8 @@ class MainViewModel(
     }
 
     fun scanReceipt(uri: Uri) {
-        viewModelScope.launch {
+        scanJob?.cancel()
+        scanJob = viewModelScope.launch {
             _scanState.value = ScanState.Processing
             _scanState.value = when (val outcome = receiptScanner.scan(uri)) {
                 is ScanOutcome.Success -> ScanState.Success(
@@ -151,6 +161,13 @@ class MainViewModel(
     }
 
     fun clearScanState() {
+        _scanState.value = ScanState.Idle
+    }
+
+    /** Stops an in-flight scan (the user backed out of the progress dialog). */
+    fun cancelScan() {
+        scanJob?.cancel()
+        scanJob = null
         _scanState.value = ScanState.Idle
     }
     

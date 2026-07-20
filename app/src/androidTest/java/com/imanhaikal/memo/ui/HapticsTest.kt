@@ -90,7 +90,7 @@ class HapticsTest {
         composeTestRule.setContent {
             MemoTheme {
                 SetupDialog(
-                    onConfirm = { _, _ -> },
+                    onConfirm = { _, _, _ -> },
                     onDismiss = {}
                 )
             }

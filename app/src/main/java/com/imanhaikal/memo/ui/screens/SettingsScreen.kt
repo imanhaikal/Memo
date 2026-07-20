@@ -1,5 +1,8 @@
 package com.imanhaikal.memo.ui.screens
 
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.LocalIndication
@@ -41,12 +44,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -56,8 +60,13 @@ import com.imanhaikal.memo.ui.components.MemoInput
 import com.imanhaikal.memo.ui.components.PressScale
 import com.imanhaikal.memo.ui.components.springPress
 import com.imanhaikal.memo.ui.theme.AppColors
+import com.imanhaikal.memo.utils.CsvExporter
 import com.imanhaikal.memo.utils.CurrencyUtils
 import com.imanhaikal.memo.utils.rememberStrongHaptics
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.time.LocalDate
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -77,6 +86,34 @@ fun SettingsScreen(
     var showResetDialog by rememberSaveable { mutableStateOf(false) }
     var showCurrencyChangeDialog by rememberSaveable { mutableStateOf(false) }
     val haptic = rememberStrongHaptics()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // SAF document picker: the user chooses where the CSV lands, we just write it
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/csv")
+    ) { uri ->
+        if (uri != null) {
+            val transactions = state.transactions
+            val currencyCode = state.currencyCode
+            scope.launch {
+                val written = withContext(Dispatchers.IO) {
+                    runCatching {
+                        context.contentResolver.openOutputStream(uri)?.use { stream ->
+                            stream.write(
+                                CsvExporter.buildCsv(transactions, currencyCode).toByteArray()
+                            )
+                        } != null
+                    }.getOrDefault(false)
+                }
+                Toast.makeText(
+                    context,
+                    if (written) "Exported ${transactions.size} expenses" else "Export failed",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
 
     // We'll initialize with state values.
     // Ideally we want to detect changes to enable the save button.
@@ -253,9 +290,9 @@ fun SettingsScreen(
                     .fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = AppColors.Yellow,
-                    contentColor = AppColors.TextPrimary,
-                    disabledContainerColor = Color.LightGray,
-                    disabledContentColor = Color.Gray
+                    contentColor = AppColors.OnYellow,
+                    disabledContainerColor = AppColors.Disabled,
+                    disabledContentColor = AppColors.OnDisabled
                 ),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -263,6 +300,51 @@ fun SettingsScreen(
                     text = "Save Changes",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.padding(vertical = 8.dp)
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(AppColors.Border)
+        )
+
+        // Data Section
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text(
+                text = "Data",
+                style = MaterialTheme.typography.titleMedium,
+                color = AppColors.TextSecondary
+            )
+
+            val exportInteraction = remember { MutableInteractionSource() }
+            OutlinedButton(
+                onClick = {
+                    haptic.tick()
+                    exportLauncher.launch("memo-expenses-${LocalDate.now()}.csv")
+                },
+                enabled = state.transactions.isNotEmpty(),
+                interactionSource = exportInteraction,
+                modifier = Modifier
+                    .springPress(exportInteraction)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = AppColors.TextPrimary,
+                    disabledContentColor = AppColors.OnDisabled
+                ),
+                border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Border)
+            ) {
+                Text(
+                    text = if (state.transactions.isEmpty()) {
+                        "No expenses to export"
+                    } else {
+                        "Export expenses (CSV)"
+                    },
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(vertical = 4.dp)
                 )
             }
         }
@@ -340,7 +422,7 @@ fun SettingsScreen(
                     Text("Cancel", color = AppColors.TextSecondary)
                 }
             },
-            containerColor = Color.White,
+            containerColor = AppColors.Surface,
             titleContentColor = AppColors.TextPrimary,
             textContentColor = AppColors.TextSecondary
         )
@@ -359,7 +441,7 @@ fun SettingsScreen(
                         showResetDialog = false
                     }
                 ) {
-                    Text("Reset", color = Color.Red)
+                    Text("Reset", color = AppColors.Red)
                 }
             },
             dismissButton = {
@@ -367,7 +449,7 @@ fun SettingsScreen(
                     Text("Cancel", color = AppColors.TextPrimary)
                 }
             },
-            containerColor = Color.White,
+            containerColor = AppColors.Surface,
             titleContentColor = AppColors.TextPrimary,
             textContentColor = AppColors.TextSecondary
         )

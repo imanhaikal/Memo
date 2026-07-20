@@ -4,6 +4,8 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,7 +17,10 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import com.imanhaikal.memo.ui.components.MemoInput
@@ -42,17 +47,30 @@ import androidx.compose.ui.window.Dialog
 import com.imanhaikal.memo.ui.components.springPress
 import com.imanhaikal.memo.ui.theme.AppColors
 import com.imanhaikal.memo.ui.theme.MemoTheme
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import com.imanhaikal.memo.utils.CurrencyUtils
 import com.imanhaikal.memo.utils.autoFocusOnceAttached
 import kotlinx.coroutines.launch
+import java.util.Currency
+import java.util.Locale
 
 @Composable
 fun SetupDialog(
-    onConfirm: (amountCents: Long, days: Int) -> Unit,
+    onConfirm: (amountCents: Long, days: Int, currency: String) -> Unit,
     onDismiss: () -> Unit // Although usually setup isn't dismissible without action, we'll include it for standard dialog API
 ) {
     var amountText by rememberSaveable { mutableStateOf("") }
     var daysText by rememberSaveable { mutableStateOf("30") }
+    // Default to the device locale's currency when we support it
+    val defaultCurrency = remember {
+        runCatching { Currency.getInstance(Locale.getDefault()).currencyCode }
+            .getOrNull()
+            ?.takeIf { it in CurrencyUtils.SUPPORTED_CURRENCIES }
+            ?: "MYR"
+    }
+    var selectedCurrency by rememberSaveable { mutableStateOf(defaultCurrency) }
+    var showCurrencyDropdown by rememberSaveable { mutableStateOf(false) }
     val amountCents = CurrencyUtils.parseAmountToCents(amountText)
     val days = daysText.toIntOrNull()
     val isValid = amountCents != null && days != null && days > 0
@@ -65,7 +83,7 @@ fun SetupDialog(
     val submit = {
         if (amountCents != null && days != null && days > 0) {
             haptic.success()
-            onConfirm(amountCents, days)
+            onConfirm(amountCents, days, selectedCurrency)
         }
     }
 
@@ -148,6 +166,54 @@ fun SetupDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Currency Selector
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { showCurrencyDropdown = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = AppColors.TextPrimary,
+                            containerColor = AppColors.Field
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.Transparent)
+                    ) {
+                        Text(
+                            text = CurrencyUtils.SUPPORTED_CURRENCIES[selectedCurrency] ?: selectedCurrency,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier
+                                .padding(vertical = 8.dp)
+                                .fillMaxWidth(),
+                            textAlign = TextAlign.Start
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showCurrencyDropdown,
+                        onDismissRequest = { showCurrencyDropdown = false },
+                        modifier = Modifier.background(AppColors.Surface)
+                    ) {
+                        CurrencyUtils.SUPPORTED_CURRENCIES.forEach { (code, label) ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = label,
+                                        color = if (code == selectedCurrency) AppColors.TextPrimary else AppColors.TextSecondary,
+                                        fontWeight = if (code == selectedCurrency) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                },
+                                onClick = {
+                                    haptic.tick()
+                                    selectedCurrency = code
+                                    showCurrencyDropdown = false
+                                }
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
 
                 val confirmInteraction = remember { MutableInteractionSource() }
@@ -156,7 +222,9 @@ fun SetupDialog(
                     enabled = isValid,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = AppColors.Yellow,
-                        contentColor = AppColors.TextPrimary
+                        contentColor = AppColors.OnYellow,
+                        disabledContainerColor = AppColors.Disabled,
+                        disabledContentColor = AppColors.OnDisabled
                     ),
                     interactionSource = confirmInteraction,
                     modifier = Modifier
@@ -178,6 +246,6 @@ fun SetupDialog(
 @Composable
 fun SetupDialogPreview() {
     MemoTheme {
-        SetupDialog(onConfirm = { _, _ -> }, onDismiss = {})
+        SetupDialog(onConfirm = { _, _, _ -> }, onDismiss = {})
     }
 }

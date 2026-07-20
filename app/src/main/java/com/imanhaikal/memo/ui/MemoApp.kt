@@ -34,7 +34,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -112,8 +111,8 @@ fun MemoApp(
                     Snackbar(
                         snackbarData = data,
                         shape = RoundedCornerShape(16.dp),
-                        containerColor = AppColors.TextPrimary,
-                        contentColor = Color.White,
+                        containerColor = AppColors.InverseSurface,
+                        contentColor = AppColors.OnInverse,
                         actionColor = AppColors.Yellow
                     )
                 }
@@ -146,8 +145,8 @@ fun MemoApp(
                 if (!state.isSetup) {
                     // Force setup before showing any content
                     SetupDialog(
-                        onConfirm = { amount, days ->
-                            viewModel.setupBudget(amount, days)
+                        onConfirm = { amount, days, currency ->
+                            viewModel.setupBudget(amount, days, currency)
                         },
                         onDismiss = { /* Not dismissible until setup */ }
                     )
@@ -257,7 +256,9 @@ fun MemoApp(
                 }
 
                 when (val scan = scanState) {
-                    is ScanState.Processing -> ScanningReceiptDialog()
+                    is ScanState.Processing -> ScanningReceiptDialog(
+                        onCancel = { viewModel.cancelScan() }
+                    )
                     is ScanState.Success -> AddExpenseDialog(
                         initialAmountCents = scan.amountCents,
                         initialNote = scan.note,
@@ -265,6 +266,8 @@ fun MemoApp(
                         initialDescription = scan.description.ifBlank { null },
                         initialDateMillis = scan.dateMillis,
                         initialDateHasTime = scan.dateHasTime,
+                        // A stray outside tap must not throw away the scanned receipt
+                        dismissOnClickOutside = false,
                         onConfirm = { amount, note, dateMillis, hasTime, category, description ->
                             viewModel.addTransaction(amount, note, dateMillis, category, description, hasTime)
                             viewModel.clearScanState()

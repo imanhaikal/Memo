@@ -30,7 +30,7 @@ fun MemoScanFab(
         modifier = modifier.springPress(interactionSource, pressedScale = 0.92f),
         shape = RoundedCornerShape(50),
         containerColor = AppColors.Yellow,
-        contentColor = AppColors.TextPrimary,
+        contentColor = AppColors.OnYellow,
         elevation = FloatingActionButtonDefaults.elevation(
             defaultElevation = 6.dp,
             pressedElevation = 10.dp

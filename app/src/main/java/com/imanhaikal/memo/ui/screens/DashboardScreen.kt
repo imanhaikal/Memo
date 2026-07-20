@@ -36,6 +36,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.ui.BudgetUiState
+import com.imanhaikal.memo.ui.components.CategoryBreakdownCard
+import com.imanhaikal.memo.ui.components.CycleProgressCard
 import com.imanhaikal.memo.ui.components.HeroSection
 import com.imanhaikal.memo.ui.components.MemoCard
 import com.imanhaikal.memo.ui.components.StatsGrid
@@ -122,9 +124,34 @@ fun DashboardScreen(
             }
         }
 
+        item {
+            StaggeredEntrance(index = 3, play = playEntrance) {
+                CycleProgressCard(
+                    spentCents = state.spentThisCycle,
+                    totalBudgetCents = state.totalBudget,
+                    daysRemaining = state.daysRemaining,
+                    totalDays = state.totalDays,
+                    currencyCode = state.currencyCode,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+        }
+
+        if (state.categoryTotals.isNotEmpty()) {
+            item {
+                StaggeredEntrance(index = 4, play = playEntrance) {
+                    CategoryBreakdownCard(
+                        categoryTotals = state.categoryTotals,
+                        currencyCode = state.currencyCode,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+            }
+        }
+
         if (state.transactions.isNotEmpty()) {
             item {
-                StaggeredEntrance(index = 3, play = playEntrance) {
+                StaggeredEntrance(index = 5, play = playEntrance) {
                     Text(
                         text = "Recent Transactions",
                         style = MaterialTheme.typography.titleMedium,
@@ -177,7 +204,7 @@ fun DashboardScreen(
             }
         } else {
             item {
-                StaggeredEntrance(index = 3, play = playEntrance) {
+                StaggeredEntrance(index = 5, play = playEntrance) {
                     EmptyTransactions(modifier = Modifier.padding(horizontal = 16.dp))
                 }
             }
@@ -190,7 +217,7 @@ fun DashboardScreen(
     }
 }
 
-internal const val ENTRANCE_ITEM_COUNT = 4L
+internal const val ENTRANCE_ITEM_COUNT = 6L
 internal const val ENTRANCE_STAGGER_MS = 100L
 internal const val ENTRANCE_DURATION_MS = 300L
 

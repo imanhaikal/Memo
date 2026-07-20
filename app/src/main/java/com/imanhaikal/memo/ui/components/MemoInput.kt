@@ -47,7 +47,7 @@ fun MemoInput(
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
-    val backgroundColor = Color(0xFFF5F5F5)
+    val backgroundColor = AppColors.Field
     val shape = RoundedCornerShape(12.dp)
     
     // Determine border style based on focus

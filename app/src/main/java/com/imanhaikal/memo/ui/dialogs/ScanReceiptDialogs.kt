@@ -94,7 +94,7 @@ fun ScanReceiptChooserDialog(
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = AppColors.Yellow,
-                        contentColor = AppColors.TextPrimary
+                        contentColor = AppColors.OnYellow
                     ),
                     interactionSource = cameraInteraction,
                     modifier = Modifier
@@ -144,11 +144,12 @@ private val ScanningMessages = listOf(
 )
 
 @Composable
-fun ScanningReceiptDialog() {
+fun ScanningReceiptDialog(onCancel: () -> Unit) {
+    // Back press cancels the scan; a stray tap outside does not
     Dialog(
-        onDismissRequest = { },
+        onDismissRequest = onCancel,
         properties = DialogProperties(
-            dismissOnBackPress = false,
+            dismissOnBackPress = true,
             dismissOnClickOutside = false
         )
     ) {
@@ -185,7 +186,7 @@ fun ScanningReceiptDialog() {
                     Icon(
                         painter = painterResource(R.drawable.ic_camera),
                         contentDescription = null,
-                        tint = AppColors.TextPrimary,
+                        tint = AppColors.OnYellow,
                         modifier = Modifier.size(32.dp)
                     )
                 }
@@ -212,6 +213,15 @@ fun ScanningReceiptDialog() {
                         text = ScanningMessages[index],
                         style = MaterialTheme.typography.bodyMedium,
                         color = AppColors.TextPrimary
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                TextButton(onClick = onCancel) {
+                    Text(
+                        text = "Cancel",
+                        color = AppColors.TextSecondary
                     )
                 }
             }
@@ -275,7 +285,7 @@ fun ScanErrorDialog(
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = AppColors.Yellow,
-                        contentColor = AppColors.TextPrimary
+                        contentColor = AppColors.OnYellow
                     ),
                     interactionSource = retryInteraction,
                     modifier = Modifier

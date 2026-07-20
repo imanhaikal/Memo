@@ -3,6 +3,7 @@ package com.imanhaikal.memo.domain
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.ui.BudgetStatus
 import com.imanhaikal.memo.ui.BudgetUiState
+import com.imanhaikal.memo.ui.CategoryTotal
 import java.time.Clock
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -79,6 +80,12 @@ class BudgetCalculatorUseCase(private val clock: Clock) {
             baselineLimit
         }
 
+        val spentThisCycle = spentBeforeToday + spentToday
+        val categoryTotals = activeTransactions
+            .groupBy { (tx, _) -> tx.category }
+            .map { (category, txs) -> CategoryTotal(category, txs.sumOf { (tx, _) -> tx.amount }) }
+            .sortedByDescending { it.totalCents }
+
         // Status Determination
         val status = when {
             availableToday < 0 -> BudgetStatus.OVER_LIMIT
@@ -96,6 +103,8 @@ class BudgetCalculatorUseCase(private val clock: Clock) {
             status = status,
             totalBudget = totalBudgetCents,
             spentToday = spentToday,
+            spentThisCycle = spentThisCycle,
+            categoryTotals = categoryTotals,
             totalDays = totalDays,
             currencyCode = currencyCode
         )

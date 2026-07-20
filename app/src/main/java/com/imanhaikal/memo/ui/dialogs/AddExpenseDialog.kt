@@ -109,6 +109,8 @@ fun AddExpenseDialog(
     initialDescription: String? = null,
     initialDateMillis: Long? = null,
     initialDateHasTime: Boolean = true,
+    // Disable for pre-filled flows (receipt scan) where a stray outside tap would discard data
+    dismissOnClickOutside: Boolean = true,
     onConfirm: (amountCents: Long, note: String, dateMillis: Long?, hasTime: Boolean, category: Category?, description: String) -> Unit,
     onDelete: (() -> Unit)? = null,
     onDismiss: () -> Unit
@@ -213,7 +215,9 @@ fun AddExpenseDialog(
                 .imePadding()
                 // The window covers the screen, so outside-tap dismissal is ours now;
                 // the card below swallows its own taps.
-                .pointerInput(Unit) { detectTapGestures(onTap = { onDismiss() }) },
+                .pointerInput(dismissOnClickOutside) {
+                    detectTapGestures(onTap = { if (dismissOnClickOutside) onDismiss() })
+                },
             contentAlignment = Alignment.Center
         ) {
             Surface(
@@ -426,7 +430,9 @@ fun AddExpenseDialog(
                         enabled = amountCents != null,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = AppColors.Yellow,
-                            contentColor = AppColors.TextPrimary
+                            contentColor = AppColors.OnYellow,
+                            disabledContainerColor = AppColors.Disabled,
+                            disabledContentColor = AppColors.OnDisabled
                         ),
                         interactionSource = confirmInteraction,
                         modifier = Modifier
@@ -566,7 +572,7 @@ private fun DateChip(
             .springPress(interaction)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .clip(RoundedCornerShape(50))
-            .background(Color(0xFFF5F5F5))
+            .background(AppColors.Field)
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         icon(AppColors.TextSecondary)
@@ -624,8 +630,8 @@ private fun CategoryChip(
     onClick: () -> Unit
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val background = if (selected) AppColors.Yellow else Color(0xFFF5F5F5)
-    val contentColor = if (selected) AppColors.TextPrimary else AppColors.TextSecondary
+    val background = if (selected) AppColors.Yellow else AppColors.Field
+    val contentColor = if (selected) AppColors.OnYellow else AppColors.TextSecondary
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -645,7 +651,7 @@ private fun CategoryChip(
         Text(
             text = category.label,
             style = MaterialTheme.typography.labelSmall,
-            color = AppColors.TextPrimary
+            color = contentColor
         )
     }
 }

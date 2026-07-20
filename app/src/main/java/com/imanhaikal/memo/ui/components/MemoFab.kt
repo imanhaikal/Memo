@@ -11,7 +11,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.imanhaikal.memo.ui.theme.AppColors
 import com.imanhaikal.memo.utils.rememberStrongHaptics
@@ -31,8 +30,8 @@ fun MemoFab(
         },
         modifier = modifier.springPress(interactionSource, pressedScale = 0.92f),
         shape = RoundedCornerShape(50),
-        containerColor = AppColors.TextPrimary,
-        contentColor = Color.White,
+        containerColor = AppColors.InverseSurface,
+        contentColor = AppColors.OnInverse,
         elevation = FloatingActionButtonDefaults.elevation(
             defaultElevation = 8.dp,
             pressedElevation = 12.dp
