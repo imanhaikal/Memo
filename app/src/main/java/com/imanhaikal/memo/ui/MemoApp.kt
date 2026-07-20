@@ -206,19 +206,20 @@ fun MemoApp(
                 if (showAddExpenseDialog) {
                     AddExpenseDialog(
                         transaction = transactionToEdit,
-                        onConfirm = { amount, note, dateMillis, category, description ->
+                        onConfirm = { amount, note, dateMillis, hasTime, category, description ->
                             if (transactionToEdit != null) {
                                 viewModel.updateTransaction(
-                                        transactionToEdit.copy(
+                                    transactionToEdit.copy(
                                         amount = amount,
                                         note = note,
-                                        date = dateMillis!!,
+                                        date = dateMillis ?: transactionToEdit.date,
                                         category = category,
-                                        description = description
+                                        description = description,
+                                        hasTime = hasTime
                                     )
                                 )
                             } else {
-                                viewModel.addTransaction(amount, note, dateMillis, category, description)
+                                viewModel.addTransaction(amount, note, dateMillis, category, description, hasTime)
                             }
                             showAddExpenseDialog = false
                             transactionToEditId = null
@@ -263,8 +264,9 @@ fun MemoApp(
                         initialCategory = scan.category,
                         initialDescription = scan.description.ifBlank { null },
                         initialDateMillis = scan.dateMillis,
-                        onConfirm = { amount, note, dateMillis, category, description ->
-                            viewModel.addTransaction(amount, note, dateMillis, category, description)
+                        initialDateHasTime = scan.dateHasTime,
+                        onConfirm = { amount, note, dateMillis, hasTime, category, description ->
+                            viewModel.addTransaction(amount, note, dateMillis, category, description, hasTime)
                             viewModel.clearScanState()
                         },
                         onDismiss = { viewModel.clearScanState() }

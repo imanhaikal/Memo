@@ -3,6 +3,7 @@ package com.imanhaikal.memo.data.receipt
 import android.util.Log
 import com.imanhaikal.memo.data.Category
 import java.io.IOException
+import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -74,12 +75,17 @@ class GeminiReceiptService(
             return ScanOutcome.Failure(ScanFailureReason.UNREADABLE)
         }
 
+        val moment = ReceiptResponseParser.parseReceiptDatetime(extraction.datetime)
+        if (moment == null && extraction.datetime.isNotBlank()) {
+            Log.w(TAG, "Discarded receipt datetime '${extraction.datetime}'")
+        }
         return ScanOutcome.Success(
             amountCents = amountCents,
             note = extraction.note.trim().take(60),
             category = Category.fromId(extraction.category.trim().lowercase()),
             description = extraction.description.trim().take(300),
-            dateMillis = ReceiptResponseParser.datetimeToEpochMillis(extraction.datetime)
+            dateMillis = moment?.millis,
+            dateHasTime = moment?.hasTime ?: true
         )
     }
 
@@ -87,7 +93,7 @@ class GeminiReceiptService(
         contents = listOf(
             GeminiContent(
                 parts = listOf(
-                    GeminiPart(text = PROMPT),
+                    GeminiPart(text = buildPrompt(LocalDate.now())),
                     GeminiPart(inlineData = GeminiInlineData(mimeType = "image/jpeg", data = jpegBase64))
                 )
             )
@@ -101,8 +107,9 @@ class GeminiReceiptService(
         const val DEFAULT_URL =
             "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent"
 
-        val PROMPT = """
+        internal fun buildPrompt(today: LocalDate) = """
             You are extracting data from a photo of a purchase receipt.
+            Today's date is $today.
             Return JSON with:
             - total: the FINAL amount actually paid, after tax, service charge, discounts
               and cash rounding. A plain decimal string with a dot as decimal separator,
@@ -117,9 +124,11 @@ class GeminiReceiptService(
               notable line items (e.g. "2x cappuccino, 1x croissant"). Max 200 characters.
               Empty if unreadable.
             - datetime: the transaction date and time printed on the receipt, formatted
-              exactly as "yyyy-MM-dd HH:mm" in 24-hour time (e.g. "2026-07-18 14:35").
-              If only the date is printed, return "yyyy-MM-dd". Empty if not printed
-              or unreadable. Never guess.
+              exactly as "yyyy-MM-dd HH:mm" in 24-hour time. If only the date is printed,
+              return "yyyy-MM-dd". Transcribe exactly what is printed — do not guess.
+              Receipts often print dates as day/month/year; two-digit years mean 20xx.
+              If the year is not printed, use the most recent year that keeps the date
+              on or before today. Empty if no date is printed or it is unreadable.
             Receipts are usually in Malaysian Ringgit (RM / MYR) but may be in other
             currencies; always return only the numeric amount.
             If the image is not a readable receipt, return total "0", note "" and confidence 0.
@@ -159,6 +168,11 @@ class GeminiReceiptService(
             putJsonArray("required") {
                 add("total")
                 add("note")
+                // Optional STRING fields are frequently omitted by the model even when
+                // extractable; requiring them (with "" as the unknown value) makes it
+                // actually fill them in. category stays optional — an enum can't hold "".
+                add("description")
+                add("datetime")
             }
         }
     }

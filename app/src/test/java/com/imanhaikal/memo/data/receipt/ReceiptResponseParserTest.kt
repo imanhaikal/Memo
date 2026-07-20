@@ -145,25 +145,31 @@ class ReceiptResponseParserTest {
     // 2026-07-19 12:00 in Asia/Kuala_Lumpur
     private val nowMillis = ZonedDateTime.of(2026, 7, 19, 12, 0, 0, 0, zone).toInstant().toEpochMilli()
 
-    private fun parse(raw: String): Long? =
-        ReceiptResponseParser.datetimeToEpochMillis(raw, zone, nowMillis)
+    private fun parse(raw: String): ReceiptResponseParser.ReceiptMoment? =
+        ReceiptResponseParser.parseReceiptDatetime(raw, zone, nowMillis)
 
     @Test
     fun `parses receipt datetime format`() {
         val expected = ZonedDateTime.of(2026, 7, 18, 14, 35, 0, 0, zone).toInstant().toEpochMilli()
-        assertEquals(expected, parse("2026-07-18 14:35"))
+        assertEquals(ReceiptResponseParser.ReceiptMoment(expected, hasTime = true), parse("2026-07-18 14:35"))
+    }
+
+    @Test
+    fun `parses datetime with seconds`() {
+        val expected = ZonedDateTime.of(2026, 7, 18, 14, 35, 21, 0, zone).toInstant().toEpochMilli()
+        assertEquals(ReceiptResponseParser.ReceiptMoment(expected, hasTime = true), parse("2026-07-18 14:35:21"))
     }
 
     @Test
     fun `parses iso 8601 datetime`() {
         val expected = ZonedDateTime.of(2026, 7, 18, 14, 35, 0, 0, zone).toInstant().toEpochMilli()
-        assertEquals(expected, parse("2026-07-18T14:35:00"))
+        assertEquals(ReceiptResponseParser.ReceiptMoment(expected, hasTime = true), parse("2026-07-18T14:35:00"))
     }
 
     @Test
-    fun `date-only lands at noon`() {
+    fun `date-only lands at noon without a time`() {
         val expected = ZonedDateTime.of(2026, 7, 18, 12, 0, 0, 0, zone).toInstant().toEpochMilli()
-        assertEquals(expected, parse("2026-07-18"))
+        assertEquals(ReceiptResponseParser.ReceiptMoment(expected, hasTime = false), parse("2026-07-18"))
     }
 
     @Test
@@ -185,13 +191,14 @@ class ReceiptResponseParserTest {
     }
 
     @Test
-    fun `implausibly old datetime is rejected`() {
-        assertNull(parse("2019-07-18 14:35"))
+    fun `old receipts are accepted`() {
+        val expected = ZonedDateTime.of(2019, 7, 18, 14, 35, 0, 0, zone).toInstant().toEpochMilli()
+        assertEquals(ReceiptResponseParser.ReceiptMoment(expected, hasTime = true), parse("2019-07-18 14:35"))
     }
 
     @Test
     fun `recent past datetime within same day is accepted`() {
         val expected = ZonedDateTime.of(2026, 7, 19, 9, 15, 0, 0, zone).toInstant().toEpochMilli()
-        assertEquals(expected, parse("2026-07-19 09:15"))
+        assertEquals(ReceiptResponseParser.ReceiptMoment(expected, hasTime = true), parse("2026-07-19 09:15"))
     }
 }

@@ -20,7 +20,9 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.time.Clock
@@ -81,12 +83,23 @@ class MainViewModelTransactionTest {
     }
 
     @Test
-    fun `addTransaction defaults to uncategorized with empty description`() = runTest(testDispatcher.scheduler) {
+    fun `addTransaction defaults to uncategorized with empty description and a time`() = runTest(testDispatcher.scheduler) {
         viewModel.addTransaction(1250L, "Lunch")
         advanceUntilIdle()
 
         assertNull(insertedTransaction.captured.category)
         assertEquals("", insertedTransaction.captured.description)
+        assertTrue(insertedTransaction.captured.hasTime)
+    }
+
+    @Test
+    fun `addTransaction can store a date-only expense`() = runTest(testDispatcher.scheduler) {
+        val yesterdayNoon = fixedNowMillis - 86_400_000L
+        viewModel.addTransaction(900L, "Market", yesterdayNoon, hasTime = false)
+        advanceUntilIdle()
+
+        assertEquals(yesterdayNoon, insertedTransaction.captured.date)
+        assertFalse(insertedTransaction.captured.hasTime)
     }
 
     @Test

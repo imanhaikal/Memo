@@ -208,19 +208,21 @@ fun TransactionItem(
                         )
                         
                         // The list groups rows under day headers, so each row only needs
-                        // its time — prefixed with the category when one is set
-                        val detailStr = remember(transaction.date, transaction.category) {
+                        // its time (when one is known) — prefixed with the category
+                        val detailStr = remember(transaction.date, transaction.category, transaction.hasTime) {
                             listOfNotNull(
                                 transaction.category?.label,
-                                DateLabels.timeLabel(transaction.date)
+                                if (transaction.hasTime) DateLabels.timeLabel(transaction.date) else null
                             ).joinToString(" · ")
                         }
 
-                        Text(
-                            text = detailStr,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = AppColors.TextTertiary
-                        )
+                        if (detailStr.isNotEmpty()) {
+                            Text(
+                                text = detailStr,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = AppColors.TextTertiary
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.width(16.dp))

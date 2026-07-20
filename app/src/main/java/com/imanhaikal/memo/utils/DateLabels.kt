@@ -48,6 +48,20 @@ object DateLabels {
         return pickedDay.atTime(timeOfDay).atZone(zone).toInstant().toEpochMilli()
     }
 
+    /** The picked day (reported as UTC midnight) anchored at local noon, for time-less entries. */
+    fun pickedDayAtNoon(
+        pickedUtcMillis: Long,
+        zone: ZoneId = ZoneId.systemDefault()
+    ): Long {
+        val pickedDay = Instant.ofEpochMilli(pickedUtcMillis).atZone(ZoneOffset.UTC).toLocalDate()
+        return pickedDay.atTime(LocalTime.NOON).atZone(zone).toInstant().toEpochMilli()
+    }
+
+    /** [millis] re-anchored at local noon of its own day, used when clearing the time. */
+    fun sameDayAtNoon(millis: Long, zone: ZoneId = ZoneId.systemDefault()): Long =
+        Instant.ofEpochMilli(millis).atZone(zone).toLocalDate()
+            .atTime(LocalTime.NOON).atZone(zone).toInstant().toEpochMilli()
+
     /** Keep the day of [previousMillis] (or today if null) and set the picked time-of-day. */
     fun combineDateWithPickedTime(
         hour: Int,

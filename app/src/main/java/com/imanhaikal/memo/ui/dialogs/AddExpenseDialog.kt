@@ -13,15 +13,17 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imeNestedScroll
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -106,7 +108,8 @@ fun AddExpenseDialog(
     initialCategory: Category? = null,
     initialDescription: String? = null,
     initialDateMillis: Long? = null,
-    onConfirm: (amountCents: Long, note: String, dateMillis: Long?, category: Category?, description: String) -> Unit,
+    initialDateHasTime: Boolean = true,
+    onConfirm: (amountCents: Long, note: String, dateMillis: Long?, hasTime: Boolean, category: Category?, description: String) -> Unit,
     onDelete: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
@@ -123,6 +126,15 @@ fun AddExpenseDialog(
     // null = untouched "Today"; the ViewModel stamps clock.millis() at submit time.
     var selectedDateMillis by rememberSaveable(transaction?.id, initialDateMillis) {
         mutableStateOf(transaction?.date ?: initialDateMillis)
+    }
+    // True once a concrete time-of-day is known (edited transaction with a time, a
+    // receipt-printed time, or the user picking one). An untouched "Now" entry gets
+    // the submit-time timestamp instead, and a backdated entry without an explicit
+    // time is saved as date-only.
+    var timeExplicit by rememberSaveable(transaction?.id, initialDateMillis, initialDateHasTime) {
+        mutableStateOf(
+            transaction?.hasTime ?: (initialDateMillis != null && initialDateHasTime)
+        )
     }
     var selectedCategory by rememberSaveable(transaction?.id, initialCategory) {
         mutableStateOf(transaction?.category ?: initialCategory)
@@ -149,7 +161,15 @@ fun AddExpenseDialog(
     val submit = {
         if (amountCents != null) {
             haptic.success()
-            onConfirm(amountCents, noteText, selectedDateMillis, selectedCategory, descriptionText.trim())
+            onConfirm(
+                amountCents,
+                noteText,
+                selectedDateMillis,
+                // An untouched entry is stamped "now", which is a real time
+                timeExplicit || selectedDateMillis == null,
+                selectedCategory,
+                descriptionText.trim()
+            )
         }
     }
 
@@ -173,33 +193,48 @@ fun AddExpenseDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        // The dialog's own window must not fit system windows, otherwise IME insets read as 0
-        // inside it and the card can never move out from under the keyboard.
-        properties = DialogProperties(decorFitsSystemWindows = false)
+        // Full-size window that doesn't fit system windows: the wrap-content default
+        // lets the window itself pan/clip around the keyboard, which corrupts the
+        // scroll viewport (content scrolls down but can never scroll back up).
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
     ) {
         // Must be read inside the Dialog: its window hosts a separate focus owner,
         // and the activity's FocusManager cannot clear focus in here.
         val focusManager = LocalFocusManager.current
-        Surface(
-            shape = RoundedCornerShape(32.dp),
-            color = AppColors.Surface,
+        // imePadding on the container bounds the card above the keyboard, so the
+        // inner verticalScroll always has a correct, fully reachable range.
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
+                .fillMaxSize()
                 .systemBarsPadding()
                 .imePadding()
-                .scale(scale.value)
-                .alpha(alpha.value)
+                // The window covers the screen, so outside-tap dismissal is ours now;
+                // the card below swallows its own taps.
+                .pointerInput(Unit) { detectTapGestures(onTap = { onDismiss() }) },
+            contentAlignment = Alignment.Center
         ) {
+            Surface(
+                shape = RoundedCornerShape(32.dp),
+                color = AppColors.Surface,
+                modifier = Modifier
+                    .padding(16.dp)
+                    .widthIn(max = 320.dp)
+                    .fillMaxWidth()
+                    .scale(scale.value)
+                    .alpha(alpha.value)
+            ) {
             Column(
                 modifier = Modifier
-                    // Tapping non-interactive card area clears focus, hiding the keyboard;
-                    // children (fields, chips, buttons) consume their own taps first.
+                    // Tapping non-interactive card area clears focus, hiding the keyboard
+                    // (and swallows the tap so it doesn't dismiss the dialog); children
+                    // (fields, chips, buttons) consume their own taps first.
                     .pointerInput(Unit) {
                         detectTapGestures(onTap = { focusManager.clearFocus() })
                     }
                     .padding(24.dp)
-                    .imeNestedScroll()
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -278,7 +313,13 @@ fun AddExpenseDialog(
                                 modifier = Modifier.size(16.dp)
                             )
                         },
-                        label = selectedDateMillis?.let(DateLabels::timeLabel) ?: "Now",
+                        label = when {
+                            timeExplicit -> DateLabels.timeLabel(
+                                selectedDateMillis ?: System.currentTimeMillis()
+                            )
+                            selectedDateMillis == null -> "Now"
+                            else -> "Add time"
+                        },
                         onClick = {
                             haptic.tick()
                             showTimePicker = true
@@ -401,6 +442,7 @@ fun AddExpenseDialog(
                     }
                 }
             }
+            }
         }
     }
 
@@ -428,8 +470,17 @@ fun AddExpenseDialog(
                 TextButton(
                     onClick = {
                         datePickerState.selectedDateMillis?.let { utcMillis ->
-                            selectedDateMillis =
-                                DateLabels.combinePickedDayWithTime(utcMillis, selectedDateMillis)
+                            val pickedDay = Instant.ofEpochMilli(utcMillis)
+                                .atZone(ZoneOffset.UTC).toLocalDate()
+                            selectedDateMillis = when {
+                                // Explicit time survives a date change
+                                timeExplicit ->
+                                    DateLabels.combinePickedDayWithTime(utcMillis, selectedDateMillis)
+                                // Re-picking today on an untouched entry keeps "Today / Now"
+                                selectedDateMillis == null && pickedDay == LocalDate.now(zone) -> null
+                                // Backdated without a time: date-only, anchored at noon
+                                else -> DateLabels.pickedDayAtNoon(utcMillis)
+                            }
                         }
                         showDatePicker = false
                     },
@@ -469,12 +520,23 @@ fun AddExpenseDialog(
                     TimePicker(state = timePickerState)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        if (timeExplicit) {
+                            TextButton(onClick = {
+                                timeExplicit = false
+                                selectedDateMillis = selectedDateMillis?.let(DateLabels::sameDayAtNoon)
+                                showTimePicker = false
+                            }) {
+                                Text("No time", color = AppColors.TextSecondary)
+                            }
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
                         TextButton(onClick = { showTimePicker = false }) {
                             Text("Cancel", color = AppColors.TextSecondary)
                         }
                         TextButton(onClick = {
+                            timeExplicit = true
                             selectedDateMillis = DateLabels.combineDateWithPickedTime(
                                 timePickerState.hour,
                                 timePickerState.minute,
@@ -595,6 +657,6 @@ private fun toLocalDate(millis: Long): LocalDate =
 @Composable
 fun AddExpenseDialogPreview() {
     MemoTheme {
-        AddExpenseDialog(onConfirm = { _, _, _, _, _ -> }, onDismiss = {})
+        AddExpenseDialog(onConfirm = { _, _, _, _, _, _ -> }, onDismiss = {})
     }
 }

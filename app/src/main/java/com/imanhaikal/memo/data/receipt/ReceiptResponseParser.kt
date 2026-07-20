@@ -11,8 +11,13 @@ import java.time.format.DateTimeParseException
 
 object ReceiptResponseParser {
 
-    private val RECEIPT_DATETIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-    private const val MAX_RECEIPT_AGE_DAYS = 2 * 365L
+    // The prompt asks for "yyyy-MM-dd HH:mm", but the model sometimes appends seconds
+    // or uses ISO-8601 'T' separators anyway — accept all of those.
+    private val RECEIPT_DATETIME_FORMATS = listOf(
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"),
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+        DateTimeFormatter.ISO_LOCAL_DATE_TIME
+    )
 
     fun extractPayloadText(body: String, json: Json): String? {
         val response = try {
@@ -50,41 +55,42 @@ object ReceiptResponseParser {
         }
     }
 
+    /** A receipt timestamp; [hasTime] is false when only the day was printed. */
+    data class ReceiptMoment(val millis: Long, val hasTime: Boolean)
+
     /**
      * Parses the model-reported receipt timestamp ("yyyy-MM-dd HH:mm", ISO-8601, or a
-     * bare "yyyy-MM-dd", which lands at noon so it sorts sensibly within its day) into
-     * epoch millis in [zone]. Returns null — meaning "fall back to now" — for anything
-     * unparseable, in the future, or implausibly old (likely OCR garbage).
+     * bare "yyyy-MM-dd", which lands at noon with hasTime=false so it sorts sensibly
+     * within its day) into epoch millis in [zone]. Returns null — meaning "fall back to
+     * now" — for anything unparseable or in the future. Old receipts are accepted:
+     * the app allows backdating to any past day, and the prefilled chips are visible
+     * in the dialog, so a misread date is easy to spot and correct.
      */
-    fun datetimeToEpochMillis(
+    fun parseReceiptDatetime(
         raw: String,
         zone: ZoneId = ZoneId.systemDefault(),
         nowMillis: Long = System.currentTimeMillis()
-    ): Long? {
+    ): ReceiptMoment? {
         val text = raw.trim()
         if (text.isEmpty()) return null
 
-        val dateTime: LocalDateTime = parseDateTime(text) ?: return null
+        val (dateTime, hasTime) = parseDateTime(text) ?: return null
         val millis = dateTime.atZone(zone).toInstant().toEpochMilli()
 
         if (millis > nowMillis) return null
-        if (millis < nowMillis - MAX_RECEIPT_AGE_DAYS * 86_400_000L) return null
-        return millis
+        return ReceiptMoment(millis, hasTime)
     }
 
-    private fun parseDateTime(text: String): LocalDateTime? {
-        try {
-            return LocalDateTime.parse(text, RECEIPT_DATETIME_FORMAT)
-        } catch (e: DateTimeParseException) {
-            // fall through
-        }
-        try {
-            return LocalDateTime.parse(text) // ISO-8601, e.g. "2026-07-18T14:35:00"
-        } catch (e: DateTimeParseException) {
-            // fall through
+    private fun parseDateTime(text: String): Pair<LocalDateTime, Boolean>? {
+        for (format in RECEIPT_DATETIME_FORMATS) {
+            try {
+                return LocalDateTime.parse(text, format) to true
+            } catch (e: DateTimeParseException) {
+                // try the next format
+            }
         }
         return try {
-            LocalDate.parse(text).atTime(12, 0)
+            LocalDate.parse(text).atTime(12, 0) to false
         } catch (e: DateTimeParseException) {
             null
         }

@@ -76,7 +76,9 @@ sealed interface ScanOutcome {
         val note: String,
         val category: Category? = null,
         val description: String = "",
-        val dateMillis: Long? = null
+        val dateMillis: Long? = null,
+        // False when the receipt only printed a date, not a time
+        val dateHasTime: Boolean = true
     ) : ScanOutcome
     data class Failure(val reason: ScanFailureReason) : ScanOutcome
 }

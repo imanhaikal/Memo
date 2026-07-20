@@ -63,6 +63,27 @@ class AppDatabaseMigrationTest {
     }
 
     @Test
+    fun migrate3To4DefaultsHasTimeToTrue() {
+        helper.createDatabase(TEST_DB, 3).use { database ->
+            database.execSQL(
+                "INSERT INTO transactions (id, amount, note, date, description) VALUES (1, 1234, 'Lunch', 1700000000000, '')"
+            )
+        }
+
+        helper.runMigrationsAndValidate(
+            TEST_DB,
+            4,
+            true,
+            AppDatabase.MIGRATION_3_4,
+        ).use { database ->
+            database.query("SELECT hasTime FROM transactions WHERE id = 1").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(1, cursor.getInt(0))
+            }
+        }
+    }
+
+    @Test
     fun migrateAllTheWayFrom1() {
         helper.createDatabase(TEST_DB, 1).use { database ->
             database.execSQL(
@@ -72,10 +93,11 @@ class AppDatabaseMigrationTest {
 
         helper.runMigrationsAndValidate(
             TEST_DB,
-            3,
+            4,
             true,
             AppDatabase.MIGRATION_1_2,
             AppDatabase.MIGRATION_2_3,
+            AppDatabase.MIGRATION_3_4,
         ).use { database ->
             database.assertMigratedAmount(1_234L)
         }

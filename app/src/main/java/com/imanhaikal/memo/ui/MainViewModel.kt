@@ -40,7 +40,8 @@ sealed interface ScanState {
         val note: String,
         val category: Category? = null,
         val description: String = "",
-        val dateMillis: Long? = null
+        val dateMillis: Long? = null,
+        val dateHasTime: Boolean = true
     ) : ScanState
     data class Error(val reason: ScanFailureReason) : ScanState
 }
@@ -110,7 +111,8 @@ class MainViewModel(
         note: String,
         dateMillis: Long? = null,
         category: Category? = null,
-        description: String = ""
+        description: String = "",
+        hasTime: Boolean = true
     ) {
         viewModelScope.launch {
             val newTransaction = Transaction(
@@ -118,7 +120,8 @@ class MainViewModel(
                 note = note,
                 date = dateMillis ?: clock.millis(),
                 category = category,
-                description = description
+                description = description,
+                hasTime = hasTime
             )
             transactionDao.insertTransaction(newTransaction)
         }
@@ -139,7 +142,8 @@ class MainViewModel(
                     note = outcome.note,
                     category = outcome.category,
                     description = outcome.description,
-                    dateMillis = outcome.dateMillis
+                    dateMillis = outcome.dateMillis,
+                    dateHasTime = outcome.dateHasTime
                 )
                 is ScanOutcome.Failure -> ScanState.Error(outcome.reason)
             }

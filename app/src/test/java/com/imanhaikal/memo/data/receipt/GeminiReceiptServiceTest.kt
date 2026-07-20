@@ -67,6 +67,9 @@ class GeminiReceiptServiceTest {
         assertTrue(body.contains("\"responseMimeType\":\"application/json\""))
         assertTrue(body.contains("\"thinkingLevel\":\"MINIMAL\""))
         assertTrue(body.contains("\"data\":\"aW1hZ2U=\""))
+        // The prompt must anchor the model to the current date so it doesn't
+        // misresolve ambiguous or missing receipt years
+        assertTrue(body.contains("Today's date is ${java.time.LocalDate.now()}"))
     }
 
     @Test
@@ -99,6 +102,25 @@ class GeminiReceiptServiceTest {
         val body = server.takeRequest().body.readUtf8()
         assertTrue(body.contains("\"category\""))
         assertTrue(body.contains("\"datetime\""))
+    }
+
+    @Test
+    fun `date-only receipt datetime carries hasTime false`() {
+        val zone = ZoneId.systemDefault()
+        val receiptDay = LocalDateTime.now(zone).minusDays(1).toLocalDate()
+        server.enqueue(
+            MockResponse().setBody(
+                successBody("""{"total":"5.00","note":"Kiosk","datetime":"$receiptDay"}""")
+            )
+        )
+
+        val outcome = service.extractReceipt("aW1hZ2U=") as ScanOutcome.Success
+
+        assertEquals(
+            receiptDay.atTime(12, 0).atZone(zone).toInstant().toEpochMilli(),
+            outcome.dateMillis
+        )
+        assertEquals(false, outcome.dateHasTime)
     }
 
     @Test
