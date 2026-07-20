@@ -138,7 +138,11 @@ fun SetupDialog(
                 // Amount Input
                 MemoInput(
                     value = amountText,
-                    onValueChange = { amountText = it },
+                    onValueChange = {
+                        if (CurrencyUtils.isValidAmountInput(it)) {
+                            amountText = it
+                        }
+                    },
                     label = "Total Budget",
                     placeholder = "e.g. 1000",
                     keyboardOptions = KeyboardOptions(
@@ -150,12 +154,26 @@ fun SetupDialog(
                         .autoFocusOnceAttached(amountFocusRequester)
                 )
 
+                if (amountText.isNotEmpty() && amountCents == null) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Enter an amount greater than zero",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AppColors.Red,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Days Input
                 MemoInput(
                     value = daysText,
-                    onValueChange = { daysText = it },
+                    onValueChange = { newValue ->
+                        if (newValue.all { it.isDigit() }) {
+                            daysText = newValue
+                        }
+                    },
                     label = "Number of Days",
                     placeholder = "e.g. 30",
                     keyboardOptions = KeyboardOptions(
@@ -165,6 +183,16 @@ fun SetupDialog(
                     keyboardActions = KeyboardActions(onDone = { submit() }),
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                if (daysText.isNotEmpty() && (days == null || days <= 0)) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Enter at least 1 day",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AppColors.Red,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 

@@ -55,6 +55,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.imanhaikal.memo.data.ThemeMode
 import com.imanhaikal.memo.ui.BudgetUiState
 import com.imanhaikal.memo.ui.components.MemoInput
 import com.imanhaikal.memo.ui.components.PressScale
@@ -72,16 +73,20 @@ import java.time.LocalDate
 @Composable
 fun SettingsScreen(
     state: BudgetUiState,
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
     onBack: () -> Unit,
     onSave: (Long, Int, String) -> Unit,
     onReset: () -> Unit,
     contentPadding: PaddingValues = PaddingValues(0.dp)
 ) {
-    var budgetInput by rememberSaveable {
+    // Keyed on the saved values so the form resyncs whenever they change
+    // underneath us (e.g. after a reset) instead of showing stale numbers
+    var budgetInput by rememberSaveable(state.totalBudget) {
         mutableStateOf(CurrencyUtils.formatAmountInput(state.totalBudget))
     }
-    var daysInput by rememberSaveable { mutableStateOf(state.totalDays.toString()) }
-    var selectedCurrency by rememberSaveable { mutableStateOf(state.currencyCode) }
+    var daysInput by rememberSaveable(state.totalDays) { mutableStateOf(state.totalDays.toString()) }
+    var selectedCurrency by rememberSaveable(state.currencyCode) { mutableStateOf(state.currencyCode) }
     var showCurrencyDropdown by rememberSaveable { mutableStateOf(false) }
     var showResetDialog by rememberSaveable { mutableStateOf(false) }
     var showCurrencyChangeDialog by rememberSaveable { mutableStateOf(false) }
@@ -231,6 +236,29 @@ fun SettingsScreen(
                 }
             }
 
+            // Appearance Selector — applies immediately, no Save needed
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Appearance",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = AppColors.TextPrimary
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ThemeModeChip("System", themeMode == ThemeMode.SYSTEM) {
+                        haptic.tick()
+                        onThemeModeChange(ThemeMode.SYSTEM)
+                    }
+                    ThemeModeChip("Light", themeMode == ThemeMode.LIGHT) {
+                        haptic.tick()
+                        onThemeModeChange(ThemeMode.LIGHT)
+                    }
+                    ThemeModeChip("Dark", themeMode == ThemeMode.DARK) {
+                        haptic.tick()
+                        onThemeModeChange(ThemeMode.DARK)
+                    }
+                }
+            }
+
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     text = "Total Budget",
@@ -241,14 +269,20 @@ fun SettingsScreen(
                     value = budgetInput,
                     modifier = Modifier.testTag("BudgetInput"),
                     onValueChange = {
-                        // Allow only numeric input
-                        if (it.all { char -> char.isDigit() || char == '.' }) {
-                            budgetInput = it 
+                        if (CurrencyUtils.isValidAmountInput(it)) {
+                            budgetInput = it
                         }
                     },
                     placeholder = "0.00",
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
+                if (budgetInput.isNotEmpty() && currentBudgetCents == null) {
+                    Text(
+                        text = "Enter an amount greater than zero",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AppColors.Red
+                    )
+                }
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -268,6 +302,18 @@ fun SettingsScreen(
                     },
                     placeholder = "30",
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                if (daysInput.isNotEmpty() && (currentDays == null || currentDays <= 0)) {
+                    Text(
+                        text = "Enter at least 1 day",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AppColors.Red
+                    )
+                }
+                Text(
+                    text = "Changes apply to your current cycle right away — the cycle keeps its original start date.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AppColors.TextTertiary
                 )
             }
 
@@ -452,6 +498,35 @@ fun SettingsScreen(
             containerColor = AppColors.Surface,
             titleContentColor = AppColors.TextPrimary,
             textContentColor = AppColors.TextSecondary
+        )
+    }
+}
+
+@Composable
+private fun ThemeModeChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val interaction = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .springPress(interaction, pressedScale = PressScale.Surface)
+            .clip(RoundedCornerShape(50))
+            .background(if (selected) AppColors.Yellow else AppColors.Field)
+            .clickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                onClick = onClick
+            )
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+            ),
+            color = if (selected) AppColors.OnYellow else AppColors.TextSecondary
         )
     }
 }

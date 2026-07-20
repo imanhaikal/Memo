@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material.icons.Icons
@@ -31,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -65,6 +67,16 @@ fun DashboardScreen(
     }
     val playEntrance = !entrancePlayed
     val dayGroups = remember(state.transactions) { groupTransactionsByDay(state.transactions) }
+    // Older-cycle expenses stay visible but are visibly separated: they no longer
+    // count toward the active budget and shouldn't look like they do.
+    val cycleStart = state.cycleStartDate
+    val (currentGroups, olderGroups) = remember(dayGroups, cycleStart) {
+        if (cycleStart == null) {
+            dayGroups to emptyList()
+        } else {
+            dayGroups.partition { !it.date.isBefore(cycleStart) }
+        }
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -150,57 +162,52 @@ fun DashboardScreen(
         }
 
         if (state.transactions.isNotEmpty()) {
-            item {
-                StaggeredEntrance(index = 5, play = playEntrance) {
-                    Text(
-                        text = "Recent Transactions",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = AppColors.TextPrimary,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
+            if (currentGroups.isNotEmpty()) {
+                item {
+                    StaggeredEntrance(index = 5, play = playEntrance) {
+                        Text(
+                            text = "Recent Transactions",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = AppColors.TextPrimary,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
                 }
+                dayGroupItems(
+                    groups = currentGroups,
+                    currencyCode = state.currencyCode,
+                    onEditTransaction = onEditTransaction,
+                    onDeleteTransaction = onDeleteTransaction
+                )
             }
 
-            dayGroups.forEach { group ->
-                item(key = "day-${group.date}", contentType = "day-header") {
-                    Row(
+            if (olderGroups.isNotEmpty()) {
+                item(key = "previous-cycles-header", contentType = "section-header") {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 20.dp)
-                            .padding(top = 8.dp)
-                            .animateItem(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 16.dp)
+                            .padding(top = 16.dp)
+                            .animateItem()
                     ) {
                         Text(
-                            text = group.label,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = AppColors.TextSecondary
+                            text = "Previous Cycles",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = AppColors.TextPrimary
                         )
                         Text(
-                            text = remember(group.totalCents, state.currencyCode) {
-                                CurrencyUtils.formatCurrency(group.totalCents, state.currencyCode)
-                            },
+                            text = "Not counted in the current budget",
                             style = MaterialTheme.typography.labelSmall,
                             color = AppColors.TextTertiary
                         )
                     }
                 }
-                items(
-                    items = group.transactions,
-                    key = { it.id },
-                    contentType = { "transaction" }
-                ) { transaction ->
-                    TransactionItem(
-                        transaction = transaction,
-                        onClick = { onEditTransaction(transaction) },
-                        onDelete = { onDeleteTransaction(transaction) },
-                        currencyCode = state.currencyCode,
-                        modifier = Modifier
-                            .padding(horizontal = 16.dp)
-                            .animateItem()
-                    )
-                }
+                dayGroupItems(
+                    groups = olderGroups,
+                    currencyCode = state.currencyCode,
+                    onEditTransaction = onEditTransaction,
+                    onDeleteTransaction = onDeleteTransaction
+                )
             }
         } else {
             item {
@@ -220,6 +227,58 @@ fun DashboardScreen(
 internal const val ENTRANCE_ITEM_COUNT = 6L
 internal const val ENTRANCE_STAGGER_MS = 100L
 internal const val ENTRANCE_DURATION_MS = 300L
+
+/** Day-header + transaction rows for one list section; keys stay unique across sections. */
+private fun LazyListScope.dayGroupItems(
+    groups: List<com.imanhaikal.memo.ui.components.DayGroup>,
+    currencyCode: String,
+    onEditTransaction: (Transaction) -> Unit,
+    onDeleteTransaction: (Transaction) -> Unit
+) {
+    groups.forEach { group ->
+        item(key = "day-${group.date}", contentType = "day-header") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 8.dp)
+                    .animateItem()
+                    // One TalkBack stop per header: label and total read together
+                    .semantics(mergeDescendants = true) {},
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = group.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AppColors.TextSecondary
+                )
+                Text(
+                    text = remember(group.totalCents, currencyCode) {
+                        CurrencyUtils.formatCurrency(group.totalCents, currencyCode)
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AppColors.TextTertiary
+                )
+            }
+        }
+        items(
+            items = group.transactions,
+            key = { it.id },
+            contentType = { "transaction" }
+        ) { transaction ->
+            TransactionItem(
+                transaction = transaction,
+                onClick = { onEditTransaction(transaction) },
+                onDelete = { onDeleteTransaction(transaction) },
+                currencyCode = currencyCode,
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .animateItem()
+            )
+        }
+    }
+}
 
 @Composable
 fun StaggeredEntrance(

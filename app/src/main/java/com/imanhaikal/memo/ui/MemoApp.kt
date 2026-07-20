@@ -1,6 +1,8 @@
 package com.imanhaikal.memo.ui
 
+import android.content.ActivityNotFoundException
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -60,6 +62,7 @@ fun MemoApp(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scanState by viewModel.scanState.collectAsStateWithLifecycle()
+    val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     var showAddExpenseDialog by rememberSaveable { mutableStateOf(false) }
     var transactionToEditId by rememberSaveable { mutableStateOf<Int?>(null) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
@@ -77,6 +80,9 @@ fun MemoApp(
     // Deletes take effect immediately; the snackbar's Undo restores the exact row
     val deleteWithUndo: (Transaction) -> Unit = { transaction ->
         viewModel.deleteTransaction(transaction)
+        // Replace any showing snackbar so rapid deletes don't queue up and
+        // silently burn their undo windows while waiting to be displayed
+        snackbarHostState.currentSnackbarData?.dismiss()
         scope.launch {
             val result = snackbarHostState.showSnackbar(
                 message = "Expense deleted",
@@ -177,6 +183,8 @@ fun MemoApp(
                         if (inSettings) {
                             SettingsScreen(
                                 state = state,
+                                themeMode = themeMode,
+                                onThemeModeChange = viewModel::setThemeMode,
                                 onBack = { showSettings = false },
                                 onSave = { amount, days, currency ->
                                     viewModel.updateBudget(amount, days, currency)
@@ -243,7 +251,16 @@ fun MemoApp(
                             showScanChooser = false
                             val uri = ImageUtils.createReceiptCaptureUri(context)
                             cameraImageUriString = uri.toString()
-                            cameraLauncher.launch(uri)
+                            try {
+                                cameraLauncher.launch(uri)
+                            } catch (e: ActivityNotFoundException) {
+                                // Devices without a camera app (some tablets/emulators)
+                                Toast.makeText(
+                                    context,
+                                    "No camera app available — choose from gallery instead",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
                         },
                         onGallery = {
                             showScanChooser = false

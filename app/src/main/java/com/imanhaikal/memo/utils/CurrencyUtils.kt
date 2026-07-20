@@ -25,9 +25,11 @@ object CurrencyUtils {
         override fun initialValue() = mutableMapOf<String, NumberFormat>()
     }
 
-    private fun formatterFor(code: String): NumberFormat =
-        formatterCache.get()!!.getOrPut(code) {
-            val format = NumberFormat.getCurrencyInstance(Locale.US)
+    private fun formatterFor(code: String, locale: Locale): NumberFormat =
+        formatterCache.get()!!.getOrPut("$code|$locale") {
+            // The locale drives grouping/decimal separators and symbol placement;
+            // the currency drives the symbol and its fraction digits (JPY has none).
+            val format = NumberFormat.getCurrencyInstance(locale)
             try {
                 val currency = Currency.getInstance(code)
                 format.currency = currency
@@ -44,8 +46,19 @@ object CurrencyUtils {
             format
         }
 
-    fun formatCurrency(amountCents: Long, code: String): String =
-        formatterFor(code).format(amountCents / 100.0)
+    fun formatCurrency(
+        amountCents: Long,
+        code: String,
+        locale: Locale = Locale.getDefault()
+    ): String = formatterFor(code, locale).format(amountCents / 100.0)
+
+    /**
+     * Matches partial amount input: digits with at most one dot and two decimals.
+     * Used as the text-field filter so malformed amounts can't be typed at all.
+     */
+    private val AMOUNT_INPUT_REGEX = Regex("""\d*(\.\d{0,2})?""")
+
+    fun isValidAmountInput(input: String): Boolean = AMOUNT_INPUT_REGEX.matches(input)
 
     fun parseAmountToCents(input: String): Long? {
         val normalized = input.trim()

@@ -2,6 +2,7 @@ package com.imanhaikal.memo.ui
 
 import com.imanhaikal.memo.data.BudgetConfig
 import com.imanhaikal.memo.data.BudgetPreferences
+import com.imanhaikal.memo.data.ThemeMode
 import com.imanhaikal.memo.data.Category
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.data.TransactionDao
@@ -53,6 +54,7 @@ class MainViewModelTransactionTest {
 
         every { transactionDao.getAllTransactions() } returns transactionsFlow
         every { budgetPreferences.budgetConfig } returns configFlow
+        every { budgetPreferences.themeMode } returns kotlinx.coroutines.flow.flowOf(ThemeMode.SYSTEM)
         coEvery { transactionDao.insertTransaction(capture(insertedTransaction)) } returns Unit
 
         viewModel = MainViewModel(transactionDao, budgetPreferences, fixedClock, FakeReceiptScanner(), defaultDispatcher = testDispatcher)

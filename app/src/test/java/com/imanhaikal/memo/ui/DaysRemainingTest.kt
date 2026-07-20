@@ -2,6 +2,7 @@ package com.imanhaikal.memo.ui
 
 import com.imanhaikal.memo.data.BudgetConfig
 import com.imanhaikal.memo.data.BudgetPreferences
+import com.imanhaikal.memo.data.ThemeMode
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.data.TransactionDao
 import com.imanhaikal.memo.data.receipt.FakeReceiptScanner
@@ -44,6 +45,7 @@ class DaysRemainingTest {
 
         every { transactionDao.getAllTransactions() } returns transactionsFlow
         every { budgetPreferences.budgetConfig } returns configFlow
+        every { budgetPreferences.themeMode } returns kotlinx.coroutines.flow.flowOf(ThemeMode.SYSTEM)
 
         viewModel = MainViewModel(transactionDao, budgetPreferences, Clock.systemDefaultZone(), FakeReceiptScanner(), defaultDispatcher = testDispatcher)
     }

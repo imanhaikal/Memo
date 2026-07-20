@@ -5,7 +5,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.imanhaikal.memo.data.ThemeMode
 import com.imanhaikal.memo.ui.MainViewModel
 import com.imanhaikal.memo.ui.theme.MemoTheme
 import com.imanhaikal.memo.ui.MemoApp
@@ -23,7 +27,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            MemoTheme {
+            val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+            MemoTheme(
+                darkTheme = when (themeMode) {
+                    ThemeMode.SYSTEM -> isSystemInDarkTheme()
+                    ThemeMode.LIGHT -> false
+                    ThemeMode.DARK -> true
+                }
+            ) {
                 MemoApp(viewModel = viewModel)
             }
         }

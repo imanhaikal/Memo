@@ -10,6 +10,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.imanhaikal.memo.MemoApplication
 import com.imanhaikal.memo.data.BudgetPreferences
 import com.imanhaikal.memo.data.Category
+import com.imanhaikal.memo.data.ThemeMode
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.data.TransactionDao
 import com.imanhaikal.memo.data.receipt.ReceiptScanner
@@ -65,6 +66,8 @@ data class BudgetUiState(
     val spentToday: Long = 0L,
     val spentThisCycle: Long = 0L,
     val categoryTotals: List<CategoryTotal> = emptyList(),
+    /** First day of the active (rolled-forward) cycle; null until setup completes. */
+    val cycleStartDate: java.time.LocalDate? = null,
     val totalDays: Int = 30,
     val currencyCode: String = "MYR"
 )
@@ -81,6 +84,18 @@ class MainViewModel(
     private val _scanState = MutableStateFlow<ScanState>(ScanState.Idle)
     val scanState: StateFlow<ScanState> = _scanState.asStateFlow()
     private var scanJob: kotlinx.coroutines.Job? = null
+
+    val themeMode: StateFlow<ThemeMode> = budgetPreferences.themeMode.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = ThemeMode.SYSTEM
+    )
+
+    fun setThemeMode(mode: ThemeMode) {
+        viewModelScope.launch {
+            budgetPreferences.setThemeMode(mode)
+        }
+    }
 
     val isScanAvailable: Boolean get() = receiptScanner.isAvailable
 

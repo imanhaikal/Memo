@@ -12,6 +12,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.TextStyle
 import com.imanhaikal.memo.utils.CurrencyUtils
 import com.imanhaikal.memo.utils.rememberStrongHaptics
@@ -67,6 +69,9 @@ fun RollingCurrency(
         text = CurrencyUtils.formatCurrency(displayedCents, currencyCode),
         style = style,
         color = color,
-        modifier = modifier
+        // Screen readers get the settled target amount, not per-frame roll values
+        modifier = modifier.clearAndSetSemantics {
+            contentDescription = CurrencyUtils.formatCurrency(value, currencyCode)
+        }
     )
 }

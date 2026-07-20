@@ -105,6 +105,7 @@ class BudgetCalculatorUseCase(private val clock: Clock) {
             spentToday = spentToday,
             spentThisCycle = spentThisCycle,
             categoryTotals = categoryTotals,
+            cycleStartDate = startDate,
             totalDays = totalDays,
             currencyCode = currencyCode
         )

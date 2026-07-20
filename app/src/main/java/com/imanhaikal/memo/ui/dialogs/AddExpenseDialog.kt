@@ -254,7 +254,7 @@ fun AddExpenseDialog(
                 MemoInput(
                     value = amountText,
                     onValueChange = {
-                        if (it.all { char -> char.isDigit() || char == '.' }) {
+                        if (CurrencyUtils.isValidAmountInput(it)) {
                             amountText = it
                         }
                     },
@@ -268,6 +268,18 @@ fun AddExpenseDialog(
                         .fillMaxWidth()
                         .autoFocusOnceAttached(amountFocusRequester)
                 )
+
+                // The filter blocks malformed text, so the only invalid non-empty
+                // input left is a zero amount — say so instead of a silently dead button
+                if (amountText.isNotEmpty() && amountCents == null) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Enter an amount greater than zero",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AppColors.Red,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -543,11 +555,14 @@ fun AddExpenseDialog(
                         }
                         TextButton(onClick = {
                             timeExplicit = true
-                            selectedDateMillis = DateLabels.combineDateWithPickedTime(
+                            val combined = DateLabels.combineDateWithPickedTime(
                                 timePickerState.hour,
                                 timePickerState.minute,
                                 selectedDateMillis
                             )
+                            // The date picker already forbids future days; clamp a
+                            // future time-of-day on today the same way
+                            selectedDateMillis = minOf(combined, System.currentTimeMillis())
                             showTimePicker = false
                         }) {
                             Text("OK", color = AppColors.TextPrimary)

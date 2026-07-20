@@ -23,6 +23,16 @@ data class BudgetConfig(
     val currencyCode: String
 )
 
+/** In-app theme override; SYSTEM follows the device dark-mode setting. */
+enum class ThemeMode {
+    SYSTEM, LIGHT, DARK;
+
+    companion object {
+        fun fromId(id: String?): ThemeMode =
+            entries.firstOrNull { it.name.equals(id, ignoreCase = true) } ?: SYSTEM
+    }
+}
+
 class BudgetPreferences(private val context: Context) {
 
     companion object {
@@ -31,6 +41,17 @@ class BudgetPreferences(private val context: Context) {
         val CYCLE_START_DATE = longPreferencesKey("cycle_start_date") // Epoch millis
         val TOTAL_DAYS = intPreferencesKey("total_days")
         val CURRENCY = stringPreferencesKey("currency_code")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
+    }
+
+    val themeMode: Flow<ThemeMode> = context.dataStore.data
+        .map { preferences -> ThemeMode.fromId(preferences[THEME_MODE]) }
+        .distinctUntilChanged()
+
+    suspend fun setThemeMode(mode: ThemeMode) {
+        context.dataStore.edit { preferences ->
+            preferences[THEME_MODE] = mode.name
+        }
     }
 
     val totalBudget: Flow<Long> = context.dataStore.data.map { preferences ->
