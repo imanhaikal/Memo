@@ -105,7 +105,7 @@ class GeminiReceiptService(
         private const val TAG = "ReceiptScan"
 
         const val DEFAULT_URL =
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent"
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent"
 
         internal fun buildPrompt(today: LocalDate) = """
             You are extracting data from a photo of a purchase receipt.

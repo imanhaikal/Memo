@@ -25,7 +25,7 @@ class GeminiReceiptServiceTest {
         server.start()
         service = GeminiReceiptService(
             apiKey = "test-key",
-            baseUrl = server.url("/v1beta/models/gemini-3.1-flash-lite:generateContent").toString()
+            baseUrl = server.url("/v1beta/models/gemini-flash-lite-latest:generateContent").toString()
         )
     }
 
