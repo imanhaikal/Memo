@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -75,6 +77,7 @@ fun SettingsScreen(
     state: BudgetUiState,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
+    scanAvailable: Boolean,
     onBack: () -> Unit,
     onSave: (Long, Int, String) -> Unit,
     onReset: () -> Unit,
@@ -143,6 +146,9 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // Match the dashboard: cap and centre the column on wide screens
+            .wrapContentWidth(Alignment.CenterHorizontally)
+            .widthIn(max = CONTENT_MAX_WIDTH)
             .padding(contentPadding)
             .statusBarsPadding()
             .navigationBarsPadding()
@@ -391,6 +397,16 @@ fun SettingsScreen(
                     },
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.padding(vertical = 4.dp)
+                )
+            }
+
+            if (!scanAvailable) {
+                // Explain the missing scan FAB instead of leaving the feature invisible
+                Text(
+                    text = "Receipt scanning is unavailable in this build — it needs a " +
+                        "GEMINI_API_KEY in local.properties at build time.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AppColors.TextTertiary
                 )
             }
         }

@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -79,7 +81,12 @@ fun DashboardScreen(
     }
 
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            // Keep the single-column layout readable on tablets and in landscape:
+            // cap the width and centre it instead of stretching cards edge to edge
+            .wrapContentWidth(Alignment.CenterHorizontally)
+            .widthIn(max = CONTENT_MAX_WIDTH),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -223,6 +230,9 @@ fun DashboardScreen(
         }
     }
 }
+
+/** Widest the single-column content grows before it stops stretching and centres. */
+internal val CONTENT_MAX_WIDTH = 600.dp
 
 internal const val ENTRANCE_ITEM_COUNT = 6L
 internal const val ENTRANCE_STAGGER_MS = 100L

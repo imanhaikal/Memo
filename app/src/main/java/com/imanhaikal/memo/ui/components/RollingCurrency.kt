@@ -65,8 +65,12 @@ fun RollingCurrency(
     // reading animatedValue.value directly would recompose every spring frame.
     val displayedCents by remember { derivedStateOf { animatedValue.value.toLong() } }
 
+    // Float can't represent large cent values exactly (> ~2^24), so once the roll
+    // reaches its target, display the exact Long instead of the nearest float
+    val settledCents = if (displayedCents == value.toFloat().toLong()) value else displayedCents
+
     Text(
-        text = CurrencyUtils.formatCurrency(displayedCents, currencyCode),
+        text = CurrencyUtils.formatCurrency(settledCents, currencyCode),
         style = style,
         color = color,
         // Screen readers get the settled target amount, not per-frame roll values

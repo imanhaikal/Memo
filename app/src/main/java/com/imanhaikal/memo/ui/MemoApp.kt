@@ -185,6 +185,7 @@ fun MemoApp(
                                 state = state,
                                 themeMode = themeMode,
                                 onThemeModeChange = viewModel::setThemeMode,
+                                scanAvailable = viewModel.isScanAvailable,
                                 onBack = { showSettings = false },
                                 onSave = { amount, days, currency ->
                                     viewModel.updateBudget(amount, days, currency)
