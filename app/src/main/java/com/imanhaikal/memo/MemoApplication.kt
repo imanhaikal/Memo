@@ -12,6 +12,7 @@ import com.imanhaikal.memo.data.PreUpgradeSnapshot
 import com.imanhaikal.memo.data.RecurringRuleDao
 import com.imanhaikal.memo.data.RoomTransactionRunner
 import com.imanhaikal.memo.data.TransactionDao
+import com.imanhaikal.memo.data.backup.BackupRepository
 import com.imanhaikal.memo.data.receipt.GeminiReceiptScanner
 import com.imanhaikal.memo.data.receipt.GeminiReceiptService
 import com.imanhaikal.memo.data.receipt.ReceiptScanner
@@ -47,6 +48,7 @@ interface AppContainer {
     val categoryCapDao: CategoryCapDao
     val recurringRuleDao: RecurringRuleDao
     val budgetRepository: BudgetRepository
+    val backupRepository: BackupRepository
     val budgetPreferences: BudgetPreferences
     val clock: Clock
     val receiptScanner: ReceiptScanner
@@ -105,6 +107,20 @@ class DefaultAppContainer(private val context: Application) : AppContainer {
             preferences = budgetPreferences,
             cycleRollover = cycleRollover,
             clock = clock
+        )
+    }
+
+    override val backupRepository: BackupRepository by lazy {
+        BackupRepository(
+            runInTransaction = RoomTransactionRunner(database),
+            budgetDao = budgetDao,
+            budgetCycleDao = budgetCycleDao,
+            categoryCapDao = categoryCapDao,
+            recurringRuleDao = recurringRuleDao,
+            transactionDao = transactionDao,
+            activeBudgetStore = budgetPreferences,
+            clock = clock,
+            appVersionCode = BuildConfig.VERSION_CODE
         )
     }
 

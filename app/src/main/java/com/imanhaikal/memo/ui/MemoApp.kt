@@ -33,6 +33,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.data.TransactionType
+import com.imanhaikal.memo.data.backup.ImportMode
 import com.imanhaikal.memo.ui.components.DashboardSkeleton
 import com.imanhaikal.memo.ui.components.MemoFab
 import com.imanhaikal.memo.ui.components.MemoScanFab
@@ -44,17 +45,21 @@ import com.imanhaikal.memo.ui.dialogs.SetupDialog
 import com.imanhaikal.memo.ui.navigation.MemoNavHost
 import com.imanhaikal.memo.ui.navigation.Screen
 import com.imanhaikal.memo.ui.navigation.rememberMemoBackStack
+import com.imanhaikal.memo.ui.screens.BackupSummary
 import com.imanhaikal.memo.ui.screens.BudgetsScreen
 import com.imanhaikal.memo.ui.screens.CategoryCapsScreen
 import com.imanhaikal.memo.ui.screens.CycleHistoryScreen
 import com.imanhaikal.memo.ui.screens.DashboardScreen
 import com.imanhaikal.memo.ui.screens.SettingsScreen
 import com.imanhaikal.memo.ui.theme.AppColors
+import com.imanhaikal.memo.utils.DateLabels
 import com.imanhaikal.memo.utils.ImageUtils
 import com.imanhaikal.memo.utils.LocalHapticsEnabled
 import com.imanhaikal.memo.utils.rememberStrongHaptics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.ZoneId
 
 @Composable
 fun MemoApp(
@@ -219,6 +224,27 @@ fun MemoApp(
                                     viewModel.updateBudget(amount, days, currency)
                                 },
                                 onClearData = { viewModel.clearActiveBudgetData() },
+                                onBuildBackup = { viewModel.buildBackupJson() },
+                                onImportBackup = { contents, replace, onFinished ->
+                                    viewModel.importBackup(
+                                        contents = contents,
+                                        mode = if (replace) ImportMode.REPLACE else ImportMode.MERGE,
+                                        onFinished = onFinished
+                                    )
+                                },
+                                onPreviewBackup = { contents ->
+                                    viewModel.previewBackup(contents)?.let { backup ->
+                                        BackupSummary(
+                                            budgets = backup.budgets.size,
+                                            transactions = backup.transactions.size,
+                                            exportedOn = DateLabels.relativeDayLabel(
+                                                Instant.ofEpochMilli(backup.exportedAtMillis)
+                                                    .atZone(ZoneId.systemDefault())
+                                                    .toLocalDate()
+                                            )
+                                        )
+                                    }
+                                },
                                 onReset = {
                                     viewModel.resetBudget()
                                     backStack.popToRoot()

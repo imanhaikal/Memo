@@ -18,6 +18,10 @@ import com.imanhaikal.memo.data.ThemeMode
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.data.TransactionDao
 import com.imanhaikal.memo.data.TransactionType
+import com.imanhaikal.memo.data.backup.BackupRepository
+import com.imanhaikal.memo.data.backup.ImportMode
+import com.imanhaikal.memo.data.backup.ImportResult
+import com.imanhaikal.memo.data.backup.MemoBackup
 import com.imanhaikal.memo.data.receipt.ReceiptScanner
 import com.imanhaikal.memo.data.receipt.ScanFailureReason
 import com.imanhaikal.memo.data.receipt.ScanOutcome
@@ -47,6 +51,12 @@ import java.time.LocalDate
 
 enum class BudgetStatus {
     ON_TRACK, CAREFUL, OVER_LIMIT
+}
+
+/** Whether a backup import is in flight; export is fast enough to need no state. */
+sealed interface BackupState {
+    data object Idle : BackupState
+    data object Working : BackupState
 }
 
 sealed interface ScanState {
@@ -110,6 +120,7 @@ data class BudgetUiState(
 
 class MainViewModel(
     private val budgetRepository: BudgetRepository,
+    private val backupRepository: BackupRepository,
     private val transactionDao: TransactionDao,
     private val appearancePreferences: AppearancePreferences,
     private val clock: Clock,
@@ -351,6 +362,36 @@ class MainViewModel(
         }
     }
 
+    // ---- Backup ----------------------------------------------------------------------
+
+    private val _backupState = MutableStateFlow<BackupState>(BackupState.Idle)
+    val backupState: StateFlow<BackupState> = _backupState.asStateFlow()
+
+    /** Serializes the whole database; the caller writes the bytes to the chosen file. */
+    suspend fun buildBackupJson(): String = backupRepository.export()
+
+    fun importBackup(contents: String, mode: ImportMode, onFinished: (String) -> Unit) {
+        viewModelScope.launch {
+            _backupState.value = BackupState.Working
+            val result = backupRepository.import(contents, mode)
+            _backupState.value = BackupState.Idle
+            onFinished(
+                when (result) {
+                    is ImportResult.Success -> buildString {
+                        append("Imported ${result.transactions} expenses")
+                        if (result.budgets > 0) append(" across ${result.budgets} budgets")
+                        if (result.skipped > 0) append(", skipped ${result.skipped} duplicates")
+                    }
+                    is ImportResult.Failure -> result.reason.message
+                }
+            )
+        }
+    }
+
+    /** Reads the manifest so the import dialog can say what the file holds. */
+    fun previewBackup(contents: String): MemoBackup? =
+        backupRepository.preview(contents).getOrNull()
+
     // ---- Receipt scanning ------------------------------------------------------------
 
     fun scanReceipt(uri: Uri) {
@@ -390,6 +431,7 @@ class MainViewModel(
                 val container = application.container
                 MainViewModel(
                     budgetRepository = container.budgetRepository,
+                    backupRepository = container.backupRepository,
                     transactionDao = container.transactionDao,
                     appearancePreferences = container.budgetPreferences,
                     clock = container.clock,

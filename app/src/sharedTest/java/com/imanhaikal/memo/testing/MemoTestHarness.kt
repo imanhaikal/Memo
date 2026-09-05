@@ -2,6 +2,7 @@ package com.imanhaikal.memo.testing
 
 import com.imanhaikal.memo.data.Budget
 import com.imanhaikal.memo.data.BudgetRepository
+import com.imanhaikal.memo.data.backup.BackupRepository
 import com.imanhaikal.memo.data.receipt.ScanOutcome
 import com.imanhaikal.memo.domain.BudgetCalculatorUseCase
 import com.imanhaikal.memo.domain.CycleMath
@@ -45,6 +46,17 @@ class MemoTestHarness(
         clock = clock
     )
 
+    val backupRepository = BackupRepository(
+        runInTransaction = ImmediateTransactionRunner,
+        budgetDao = budgetDao,
+        budgetCycleDao = cycleDao,
+        categoryCapDao = capDao,
+        recurringRuleDao = recurringDao,
+        transactionDao = transactionDao,
+        activeBudgetStore = activeBudgetStore,
+        clock = clock
+    )
+
     /** Only theme and haptics are read off this; budget values live in Room now. */
     val appearance = FakeAppearancePreferences()
 
@@ -82,6 +94,7 @@ class MemoTestHarness(
 
     fun viewModel(dispatcher: CoroutineDispatcher): MainViewModel = MainViewModel(
         budgetRepository = repository,
+        backupRepository = backupRepository,
         transactionDao = transactionDao,
         appearancePreferences = appearance,
         clock = clock,

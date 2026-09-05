@@ -90,6 +90,9 @@ fun SettingsScreen(
     onOpenHistory: () -> Unit,
     onOpenCategoryCaps: () -> Unit,
     onClearData: () -> Unit,
+    onBuildBackup: suspend () -> String,
+    onImportBackup: (contents: String, replace: Boolean, onFinished: (String) -> Unit) -> Unit,
+    onPreviewBackup: (String) -> BackupSummary?,
     onSave: (Long, Int, String) -> Unit,
     onReset: () -> Unit,
     onMessage: (String) -> Unit,
@@ -118,12 +121,17 @@ fun SettingsScreen(
         if (uri != null) {
             val transactions = state.transactions
             val currencyCode = state.currencyCode
+            val budgetName = state.budgetName
             scope.launch {
                 val written = withContext(Dispatchers.IO) {
                     runCatching {
                         context.contentResolver.openOutputStream(uri)?.use { stream ->
                             stream.write(
-                                CsvExporter.buildCsv(transactions, currencyCode).toByteArray()
+                                CsvExporter.buildCsv(
+                                    transactions = transactions,
+                                    currencyCode = currencyCode,
+                                    budgetName = budgetName
+                                ).toByteArray()
                             )
                         } != null
                     }.getOrDefault(false)
@@ -131,6 +139,56 @@ fun SettingsScreen(
                 onMessage(
                     if (written) "Exported ${transactions.size} expenses" else "Export failed"
                 )
+            }
+        }
+    }
+
+    // Full-fidelity JSON backup: everything CSV can't carry (budgets, cycles, caps,
+    // recurring rules) so a reinstall can actually be undone.
+    var pendingImport by remember { mutableStateOf<PendingImport?>(null) }
+
+    val backupExportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val written = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val payload = onBuildBackup()
+                        context.contentResolver.openOutputStream(uri)?.use { stream ->
+                            stream.write(payload.toByteArray())
+                        } != null
+                    }.getOrDefault(false)
+                }
+                onMessage(if (written) "Backup saved" else "Backup failed")
+            }
+        }
+    }
+
+    val backupImportLauncher = rememberLauncherForActivityResult(
+        // Some file pickers hand JSON back as octet-stream, so accept the wider types
+        // rather than leaving the user's own backup greyed out.
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val contents = withContext(Dispatchers.IO) {
+                    runCatching {
+                        context.contentResolver.openInputStream(uri)?.use { stream ->
+                            stream.readBytes().decodeToString()
+                        }
+                    }.getOrNull()
+                }
+                if (contents == null) {
+                    onMessage("Couldn't read that file")
+                } else {
+                    val summary = onPreviewBackup(contents)
+                    if (summary == null) {
+                        onMessage("That file isn't a Memo backup")
+                    } else {
+                        pendingImport = PendingImport(contents, summary)
+                    }
+                }
             }
         }
     }
@@ -465,6 +523,24 @@ fun SettingsScreen(
                 color = AppColors.TextSecondary
             )
 
+            DataButton(
+                label = "Back up everything (JSON)",
+                onClick = {
+                    haptic.tick()
+                    backupExportLauncher.launch("memo-backup-${LocalDate.now()}.json")
+                }
+            )
+
+            DataButton(
+                label = "Restore from a backup",
+                onClick = {
+                    haptic.tick()
+                    backupImportLauncher.launch(
+                        arrayOf("application/json", "application/octet-stream", "text/plain")
+                    )
+                }
+            )
+
             val exportInteraction = remember { MutableInteractionSource() }
             OutlinedButton(
                 onClick = {
@@ -608,6 +684,22 @@ fun SettingsScreen(
         )
     }
 
+    pendingImport?.let { pending ->
+        ImportBackupDialog(
+            summary = pending.summary,
+            onMerge = {
+                onImportBackup(pending.contents, false, onMessage)
+                pendingImport = null
+            },
+            onReplace = {
+                onImportBackup(pending.contents, true, onMessage)
+                pendingImport = null
+                onBack()
+            },
+            onDismiss = { pendingImport = null }
+        )
+    }
+
     if (showClearDialog) {
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
@@ -638,6 +730,105 @@ fun SettingsScreen(
             containerColor = AppColors.Surface,
             titleContentColor = AppColors.TextPrimary,
             textContentColor = AppColors.TextSecondary
+        )
+    }
+}
+
+/**
+ * What an import will do, shown before anything is written. Replace is destructive, so it
+ * gets the same red treatment as the Danger Zone rather than a bare "OK".
+ */
+@Composable
+private fun ImportBackupDialog(
+    summary: BackupSummary,
+    onMerge: () -> Unit,
+    onReplace: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val haptic = rememberStrongHaptics()
+    var confirmingReplace by rememberSaveable { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = if (confirmingReplace) "Replace everything?" else "Restore backup") },
+        text = {
+            Text(
+                text = if (confirmingReplace) {
+                    "This deletes everything currently in Memo and replaces it with the " +
+                        "backup. This can't be undone."
+                } else {
+                    buildString {
+                        append("This backup holds ${summary.transactions} expenses")
+                        if (summary.budgets > 0) append(" across ${summary.budgets} budgets")
+                        summary.exportedOn?.let { append(", saved $it") }
+                        append(".\n\n")
+                        append("Add merges it in, skipping anything you already have. ")
+                        append("Replace wipes Memo first.")
+                    }
+                }
+            )
+        },
+        confirmButton = {
+            if (confirmingReplace) {
+                TextButton(
+                    onClick = {
+                        haptic.error()
+                        onReplace()
+                    }
+                ) {
+                    Text("Replace", color = AppColors.Red)
+                }
+            } else {
+                TextButton(
+                    onClick = {
+                        haptic.success()
+                        onMerge()
+                    }
+                ) {
+                    Text("Add", color = AppColors.TextPrimary)
+                }
+            }
+        },
+        dismissButton = {
+            if (confirmingReplace) {
+                TextButton(onClick = { confirmingReplace = false }) {
+                    Text("Back", color = AppColors.TextPrimary)
+                }
+            } else {
+                Row {
+                    TextButton(onClick = { confirmingReplace = true }) {
+                        Text("Replace", color = AppColors.Red)
+                    }
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel", color = AppColors.TextSecondary)
+                    }
+                }
+            }
+        },
+        containerColor = AppColors.Surface,
+        titleContentColor = AppColors.TextPrimary,
+        textContentColor = AppColors.TextSecondary
+    )
+}
+
+/** Full-width outlined action in the Data section. */
+@Composable
+private fun DataButton(label: String, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    OutlinedButton(
+        onClick = onClick,
+        interactionSource = interaction,
+        modifier = Modifier
+            .springPress(interaction)
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = AppColors.TextPrimary),
+        border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Border)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(vertical = 4.dp)
         )
     }
 }
