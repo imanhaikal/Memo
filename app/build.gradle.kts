@@ -107,6 +107,8 @@ dependencies {
     // Receipt scanning (Gemini REST + image handling)
     implementation(libs.okhttp)
     implementation(libs.androidx.work.runtime)
+    implementation(libs.androidx.glance.appwidget)
+    implementation(libs.androidx.glance.material3)
     implementation(libs.androidx.exifinterface)
 
     testImplementation(libs.junit)

@@ -26,12 +26,14 @@ import com.imanhaikal.memo.domain.RecurringScheduleCalculator
 import com.imanhaikal.memo.domain.DayTicker
 import com.imanhaikal.memo.domain.SystemDayTicker
 import com.imanhaikal.memo.notifications.MemoNotifications
+import com.imanhaikal.memo.widget.WidgetUpdater
 import com.imanhaikal.memo.work.MemoWorkScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.time.Clock
 
@@ -47,6 +49,18 @@ class MemoApplication : Application() {
         container = DefaultAppContainer(this)
         container.startupMigration.start()
         MemoNotifications.createChannels(this)
+
+        // Keeps the home-screen widget in step with the app: any transaction write, a
+        // budget switch, or the day rolling over changes the number it shows.
+        container.applicationScope.launch {
+            container.startupMigration.await()
+            combine(
+                container.transactionDao.getAllTransactions(),
+                container.budgetRepository.observeActiveBudget(),
+                container.dayTicker.today
+            ) { _, _, _ -> Unit }
+                .collect { WidgetUpdater.refresh(this@MemoApplication) }
+        }
 
         container.applicationScope.launch {
             container.startupMigration.await()

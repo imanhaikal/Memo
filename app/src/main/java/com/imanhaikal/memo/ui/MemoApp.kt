@@ -18,6 +18,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,13 +60,16 @@ import com.imanhaikal.memo.utils.ImageUtils
 import com.imanhaikal.memo.utils.LocalHapticsEnabled
 import com.imanhaikal.memo.utils.rememberStrongHaptics
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
 
 @Composable
 fun MemoApp(
-    viewModel: MainViewModel = viewModel(factory = MainViewModel.Factory)
+    viewModel: MainViewModel = viewModel(factory = MainViewModel.Factory),
+    /** Emits true when the widget or a launcher shortcut asked to add an expense. */
+    quickAddRequests: MutableStateFlow<Boolean> = remember { MutableStateFlow(false) }
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scanState by viewModel.scanState.collectAsStateWithLifecycle()
@@ -94,6 +98,18 @@ fun MemoApp(
 
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val quickAdd by quickAddRequests.collectAsStateWithLifecycle()
+
+    // Opening from the widget lands straight in the add dialog, but only once the user
+    // actually has a budget — otherwise setup is the thing that needs answering first.
+    LaunchedEffect(quickAdd, state.isSetup) {
+        if (quickAdd && state.isSetup) {
+            transactionToEditId = null
+            addAsIncome = false
+            showAddExpenseDialog = true
+            quickAddRequests.value = false
+        }
+    }
     val scope = rememberCoroutineScope()
     val haptic = rememberStrongHaptics()
 
