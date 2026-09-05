@@ -1,19 +1,11 @@
 package com.imanhaikal.memo.ui
 
-import com.imanhaikal.memo.data.BudgetConfig
-import com.imanhaikal.memo.data.BudgetPreferences
-import com.imanhaikal.memo.data.ThemeMode
 import com.imanhaikal.memo.data.Category
 import com.imanhaikal.memo.data.Transaction
-import com.imanhaikal.memo.data.TransactionDao
-import com.imanhaikal.memo.data.receipt.FakeReceiptScanner
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
+import com.imanhaikal.memo.data.TransactionType
+import com.imanhaikal.memo.testing.MemoTestHarness
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -33,32 +25,23 @@ import java.time.ZoneId
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModelTransactionTest {
 
-    private lateinit var viewModel: MainViewModel
-    private lateinit var transactionDao: TransactionDao
-    private lateinit var budgetPreferences: BudgetPreferences
     private val testDispatcher = StandardTestDispatcher()
-
     private val fixedNowMillis = 1_752_300_000_000L
-    private val fixedClock = Clock.fixed(Instant.ofEpochMilli(fixedNowMillis), ZoneId.of("Asia/Kuala_Lumpur"))
+    private val zone = ZoneId.of("Asia/Kuala_Lumpur")
+    private val fixedClock = Clock.fixed(Instant.ofEpochMilli(fixedNowMillis), zone)
+    private val today = Instant.ofEpochMilli(fixedNowMillis).atZone(zone).toLocalDate()
 
-    private val transactionsFlow = MutableStateFlow<List<Transaction>>(emptyList())
-    private val configFlow = MutableStateFlow(BudgetConfig(100_000L, 0L, 30, "MYR"))
+    private lateinit var harness: MemoTestHarness
+    private lateinit var viewModel: MainViewModel
 
-    private val insertedTransaction = slot<Transaction>()
+    /** The single row written by the action under test. */
+    private val inserted: Transaction get() = harness.transactionDao.rows.value.single()
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        transactionDao = mockk()
-        budgetPreferences = mockk()
-
-        every { transactionDao.getAllTransactions() } returns transactionsFlow
-        every { budgetPreferences.budgetConfig } returns configFlow
-        every { budgetPreferences.themeMode } returns kotlinx.coroutines.flow.flowOf(ThemeMode.SYSTEM)
-        every { budgetPreferences.hapticsEnabled } returns kotlinx.coroutines.flow.flowOf(true)
-        coEvery { transactionDao.insertTransaction(capture(insertedTransaction)) } returns Unit
-
-        viewModel = MainViewModel(transactionDao, budgetPreferences, fixedClock, FakeReceiptScanner(), defaultDispatcher = testDispatcher)
+        harness = MemoTestHarness(fixedClock, today)
+        viewModel = harness.viewModel(testDispatcher)
     }
 
     @After
@@ -66,47 +49,56 @@ class MainViewModelTransactionTest {
         Dispatchers.resetMain()
     }
 
+    private suspend fun seed() = harness.seedBudget(amountCents = 100_000L, startDate = today)
+
     @Test
     fun `addTransaction without date stamps clock now`() = runTest(testDispatcher.scheduler) {
+        seed()
         viewModel.addTransaction(1250L, "Lunch")
         advanceUntilIdle()
 
-        assertEquals(fixedNowMillis, insertedTransaction.captured.date)
-        assertEquals(1250L, insertedTransaction.captured.amount)
-        assertEquals("Lunch", insertedTransaction.captured.note)
+        assertEquals(fixedNowMillis, inserted.date)
+        assertEquals(1250L, inserted.amount)
+        assertEquals("Lunch", inserted.note)
     }
 
     @Test
     fun `addTransaction with explicit date stores it verbatim`() = runTest(testDispatcher.scheduler) {
+        seed()
         val yesterday = fixedNowMillis - 86_400_000L
         viewModel.addTransaction(900L, "Forgotten lunch", yesterday)
         advanceUntilIdle()
 
-        assertEquals(yesterday, insertedTransaction.captured.date)
+        assertEquals(yesterday, inserted.date)
     }
 
     @Test
-    fun `addTransaction defaults to uncategorized with empty description and a time`() = runTest(testDispatcher.scheduler) {
-        viewModel.addTransaction(1250L, "Lunch")
-        advanceUntilIdle()
+    fun `addTransaction defaults to an uncategorized expense with a time`() =
+        runTest(testDispatcher.scheduler) {
+            seed()
+            viewModel.addTransaction(1250L, "Lunch")
+            advanceUntilIdle()
 
-        assertNull(insertedTransaction.captured.category)
-        assertEquals("", insertedTransaction.captured.description)
-        assertTrue(insertedTransaction.captured.hasTime)
-    }
+            assertNull(inserted.category)
+            assertEquals("", inserted.description)
+            assertTrue(inserted.hasTime)
+            assertEquals(TransactionType.EXPENSE, inserted.type)
+        }
 
     @Test
     fun `addTransaction can store a date-only expense`() = runTest(testDispatcher.scheduler) {
+        seed()
         val yesterdayNoon = fixedNowMillis - 86_400_000L
         viewModel.addTransaction(900L, "Market", yesterdayNoon, hasTime = false)
         advanceUntilIdle()
 
-        assertEquals(yesterdayNoon, insertedTransaction.captured.date)
-        assertFalse(insertedTransaction.captured.hasTime)
+        assertEquals(yesterdayNoon, inserted.date)
+        assertFalse(inserted.hasTime)
     }
 
     @Test
     fun `addTransaction persists category and description`() = runTest(testDispatcher.scheduler) {
+        seed()
         viewModel.addTransaction(
             1250L,
             "Lunch",
@@ -115,7 +107,38 @@ class MainViewModelTransactionTest {
         )
         advanceUntilIdle()
 
-        assertEquals(Category.FOOD, insertedTransaction.captured.category)
-        assertEquals("Nasi lemak and teh tarik", insertedTransaction.captured.description)
+        assertEquals(Category.FOOD, inserted.category)
+        assertEquals("Nasi lemak and teh tarik", inserted.description)
+    }
+
+    @Test
+    fun `addTransaction can record income`() = runTest(testDispatcher.scheduler) {
+        seed()
+        viewModel.addTransaction(5_000L, "Refund", type = TransactionType.INCOME)
+        advanceUntilIdle()
+
+        assertEquals(TransactionType.INCOME, inserted.type)
+        // The magnitude stays positive; the type carries the sign.
+        assertEquals(5_000L, inserted.amount)
+        assertEquals(-5_000L, inserted.signedAmount)
+    }
+
+    @Test
+    fun `a new transaction is filed against the active budget`() = runTest(testDispatcher.scheduler) {
+        seed()
+        val travel = harness.seedBudget(amountCents = 50_000L, startDate = today, name = "Travel")
+
+        viewModel.addTransaction(1250L, "Taxi")
+        advanceUntilIdle()
+
+        assertEquals(travel.id, inserted.budgetId)
+    }
+
+    @Test
+    fun `nothing is written when no budget exists yet`() = runTest(testDispatcher.scheduler) {
+        viewModel.addTransaction(1250L, "Lunch")
+        advanceUntilIdle()
+
+        assertTrue(harness.transactionDao.rows.value.isEmpty())
     }
 }

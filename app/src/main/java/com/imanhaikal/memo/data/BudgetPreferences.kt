@@ -35,12 +35,23 @@ enum class ThemeMode {
 }
 
 /**
+ * Which budget the app is currently showing.
+ *
+ * Split out of [BudgetPreferences] so [BudgetRepository] depends on this narrow contract
+ * rather than on a Context-bound DataStore class, which would push its tests onto a device.
+ */
+interface ActiveBudgetStore {
+    val activeBudgetId: Flow<Long>
+    suspend fun setActiveBudgetId(id: Long)
+}
+
+/**
  * Device-scoped preferences: which budget is active, appearance, and the one-time
  * flag recording that the pre-v5 DataStore budget has been copied into Room.
  *
  * Budget values themselves now live in the `budgets` table, not here.
  */
-class BudgetPreferences(private val context: Context) {
+class BudgetPreferences(private val context: Context) : ActiveBudgetStore {
 
     companion object {
         private val LEGACY_TOTAL_BUDGET_DOUBLE = doublePreferencesKey("total_budget")
@@ -77,11 +88,11 @@ class BudgetPreferences(private val context: Context) {
     }
 
     /** Which budget the dashboard is showing. Falls back to the migrated default. */
-    val activeBudgetId: Flow<Long> = context.memoDataStore.data
+    override val activeBudgetId: Flow<Long> = context.memoDataStore.data
         .map { preferences -> preferences[ACTIVE_BUDGET_ID] ?: AppDatabase.DEFAULT_BUDGET_ID }
         .distinctUntilChanged()
 
-    suspend fun setActiveBudgetId(id: Long) {
+    override suspend fun setActiveBudgetId(id: Long) {
         context.memoDataStore.edit { preferences ->
             preferences[ACTIVE_BUDGET_ID] = id
         }

@@ -41,6 +41,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.imanhaikal.memo.data.Transaction
+import com.imanhaikal.memo.data.TransactionType
 import com.imanhaikal.memo.ui.theme.AppColors
 import com.imanhaikal.memo.utils.rememberStrongHaptics
 import com.imanhaikal.memo.utils.CurrencyUtils
@@ -69,7 +70,9 @@ fun groupTransactionsByDay(
             DayGroup(
                 date = date,
                 label = DateLabels.relativeDayLabel(date, today),
-                totalCents = dayTransactions.sumOf { it.amount },
+                // Signed: a refund logged today reduces the day's total rather than
+                // inflating it alongside the expenses it cancels out.
+                totalCents = dayTransactions.sumOf { it.signedAmount },
                 transactions = dayTransactions
             )
         }
@@ -202,18 +205,27 @@ fun TransactionItem(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val isIncome = transaction.type == TransactionType.INCOME
+
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = transaction.note.ifBlank { "Expense" },
+                            text = transaction.note.ifBlank {
+                                if (isIncome) "Income" else "Expense"
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                             color = AppColors.TextPrimary
                         )
                         
                         // The list groups rows under day headers, so each row only needs
                         // its time (when one is known) — prefixed with the category
-                        val detailStr = remember(transaction.date, transaction.category, transaction.hasTime) {
+                        val detailStr = remember(
+                            transaction.date,
+                            transaction.category,
+                            transaction.hasTime,
+                            isIncome
+                        ) {
                             listOfNotNull(
-                                transaction.category?.label,
+                                if (isIncome) "Income" else transaction.category?.label,
                                 if (transaction.hasTime) DateLabels.timeLabel(transaction.date) else null
                             ).joinToString(" · ")
                         }
@@ -229,13 +241,16 @@ fun TransactionItem(
 
                     Spacer(modifier = Modifier.width(16.dp))
 
-                    val formattedAmount = remember(transaction.amount, currencyCode) {
-                        CurrencyUtils.formatCurrency(transaction.amount, currencyCode)
+                    // The sign lives in the type, not the stored amount, so it is added
+                    // here rather than by formatting a negative number.
+                    val formattedAmount = remember(transaction.amount, currencyCode, isIncome) {
+                        val formatted = CurrencyUtils.formatCurrency(transaction.amount, currencyCode)
+                        if (isIncome) "+ $formatted" else formatted
                     }
                     Text(
                         text = formattedAmount,
                         style = MaterialTheme.typography.titleMedium,
-                        color = AppColors.TextPrimary
+                        color = if (isIncome) AppColors.Green else AppColors.TextPrimary
                     )
                 }
             }

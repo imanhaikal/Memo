@@ -86,6 +86,10 @@ fun SettingsScreen(
     onHapticsEnabledChange: (Boolean) -> Unit,
     scanAvailable: Boolean,
     onBack: () -> Unit,
+    onOpenBudgets: () -> Unit,
+    onOpenHistory: () -> Unit,
+    onOpenCategoryCaps: () -> Unit,
+    onClearData: () -> Unit,
     onSave: (Long, Int, String) -> Unit,
     onReset: () -> Unit,
     onMessage: (String) -> Unit,
@@ -101,6 +105,7 @@ fun SettingsScreen(
     var selectedCurrency by rememberSaveable(state.currencyCode) { mutableStateOf(state.currencyCode) }
     var showCurrencyDropdown by rememberSaveable { mutableStateOf(false) }
     var showResetDialog by rememberSaveable { mutableStateOf(false) }
+    var showClearDialog by rememberSaveable { mutableStateOf(false) }
     var showCurrencyChangeDialog by rememberSaveable { mutableStateOf(false) }
     val haptic = rememberStrongHaptics()
     val context = LocalContext.current
@@ -416,6 +421,42 @@ fun SettingsScreen(
                 .background(AppColors.Border)
         )
 
+        // Manage Section
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                text = "Manage",
+                style = MaterialTheme.typography.titleMedium,
+                color = AppColors.TextSecondary
+            )
+
+            SettingsNavRow(
+                title = "Budgets",
+                subtitle = if (state.allBudgets.size > 1) {
+                    "${state.allBudgets.size} budgets · ${state.budgetName} active"
+                } else {
+                    "Add a second budget, e.g. Travel"
+                },
+                onClick = onOpenBudgets
+            )
+            SettingsNavRow(
+                title = "Category limits",
+                subtitle = "Cap what you spend per category",
+                onClick = onOpenCategoryCaps
+            )
+            SettingsNavRow(
+                title = "Cycle history",
+                subtitle = "Review finished cycles",
+                onClick = onOpenHistory
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(AppColors.Border)
+        )
+
         // Data Section
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(
@@ -481,32 +522,23 @@ fun SettingsScreen(
                 ),
             )
 
-            val resetInteraction = remember { MutableInteractionSource() }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .springPress(resetInteraction, pressedScale = PressScale.Surface)
-                    // Clip before clickable so the ripple honors the rounded shape
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(AppColors.RedSubtle)
-                    .clickable(
-                        interactionSource = resetInteraction,
-                        indication = LocalIndication.current
-                    ) {
-                        haptic.tick()
-                        showResetDialog = true
-                    }
-                    .padding(16.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Reset All Data",
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        color = AppColors.Red,
-                        fontWeight = FontWeight.Bold
-                    )
-                )
-            }
+            // Two separate outs: keep the budget but wipe its history, or remove the
+            // budget entirely. Previously the only option deleted every row in the
+            // database, including budgets the user wasn't even looking at.
+            DangerAction(
+                label = "Clear this budget's expenses",
+                onClick = {
+                    haptic.tick()
+                    showClearDialog = true
+                }
+            )
+            DangerAction(
+                label = "Delete this budget",
+                onClick = {
+                    haptic.tick()
+                    showResetDialog = true
+                }
+            )
         }
     }
 
@@ -546,8 +578,14 @@ fun SettingsScreen(
     if (showResetDialog) {
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
-            title = { Text(text = "Reset All Data") },
-            text = { Text(text = "Are you sure? This will delete all transactions and reset your budget settings. This action cannot be undone.") },
+            title = { Text(text = "Delete \"${state.budgetName}\"?") },
+            text = {
+                Text(
+                    text = "This deletes the budget, every expense recorded against it, " +
+                        "and its cycle history. Other budgets are left alone. " +
+                        "This can't be undone."
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -556,7 +594,7 @@ fun SettingsScreen(
                         showResetDialog = false
                     }
                 ) {
-                    Text("Reset", color = AppColors.Red)
+                    Text("Delete", color = AppColors.Red)
                 }
             },
             dismissButton = {
@@ -567,6 +605,110 @@ fun SettingsScreen(
             containerColor = AppColors.Surface,
             titleContentColor = AppColors.TextPrimary,
             textContentColor = AppColors.TextSecondary
+        )
+    }
+
+    if (showClearDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearDialog = false },
+            title = { Text(text = "Clear expenses?") },
+            text = {
+                Text(
+                    text = "This deletes every expense and the cycle history for " +
+                        "\"${state.budgetName}\", but keeps the budget itself and its " +
+                        "settings. This can't be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        haptic.error()
+                        onClearData()
+                        showClearDialog = false
+                    }
+                ) {
+                    Text("Clear", color = AppColors.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDialog = false }) {
+                    Text("Cancel", color = AppColors.TextPrimary)
+                }
+            },
+            containerColor = AppColors.Surface,
+            titleContentColor = AppColors.TextPrimary,
+            textContentColor = AppColors.TextSecondary
+        )
+    }
+}
+
+/** A tappable row that opens another screen. */
+@Composable
+private fun SettingsNavRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    val interaction = remember { MutableInteractionSource() }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .springPress(interaction, pressedScale = PressScale.Surface)
+            .clip(RoundedCornerShape(12.dp))
+            .background(AppColors.Field)
+            .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick)
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = AppColors.TextPrimary
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = AppColors.TextTertiary
+            )
+        }
+        Text(
+            text = "›",
+            style = MaterialTheme.typography.titleMedium,
+            color = AppColors.TextSecondary
+        )
+    }
+}
+
+/** A destructive, full-width action in the Danger Zone. */
+@Composable
+private fun DangerAction(
+    label: String,
+    onClick: () -> Unit
+) {
+    val interaction = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .springPress(interaction, pressedScale = PressScale.Surface)
+            // Clip before clickable so the ripple honors the rounded shape
+            .clip(RoundedCornerShape(12.dp))
+            .background(AppColors.RedSubtle)
+            .clickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                onClick = onClick
+            )
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge.copy(
+                color = AppColors.Red,
+                fontWeight = FontWeight.Bold
+            )
         )
     }
 }

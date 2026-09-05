@@ -1,6 +1,5 @@
 package com.imanhaikal.memo.data
 
-import androidx.room.withTransaction
 import com.imanhaikal.memo.domain.CycleMath
 import com.imanhaikal.memo.domain.CycleRolloverUseCase
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -16,12 +15,12 @@ import java.time.Clock
  * read through this rather than each reaching into three DAOs.
  */
 class BudgetRepository(
-    private val database: AppDatabase,
+    private val runInTransaction: TransactionRunner,
     private val budgetDao: BudgetDao,
     private val budgetCycleDao: BudgetCycleDao,
     private val categoryCapDao: CategoryCapDao,
     private val transactionDao: TransactionDao,
-    private val preferences: BudgetPreferences,
+    private val preferences: ActiveBudgetStore,
     private val cycleRollover: CycleRolloverUseCase,
     private val clock: Clock
 ) {
@@ -93,7 +92,7 @@ class BudgetRepository(
      * here instead, in a single database transaction so a failure cannot leave orphans.
      */
     suspend fun deleteBudget(budget: Budget) {
-        database.withTransaction {
+        runInTransaction {
             transactionDao.deleteAllForBudget(budget.id)
             budgetDao.delete(budget) // cycles, caps and rules cascade via their foreign keys
         }
@@ -104,7 +103,7 @@ class BudgetRepository(
 
     /** Clears a budget's transactions and history without deleting the budget itself. */
     suspend fun clearBudgetData(budget: Budget) {
-        database.withTransaction {
+        runInTransaction {
             transactionDao.deleteAllForBudget(budget.id)
             budgetCycleDao.deleteForBudget(budget.id)
         }

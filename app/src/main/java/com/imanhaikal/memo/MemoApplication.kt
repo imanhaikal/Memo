@@ -10,6 +10,7 @@ import com.imanhaikal.memo.data.BudgetRepository
 import com.imanhaikal.memo.data.CategoryCapDao
 import com.imanhaikal.memo.data.PreUpgradeSnapshot
 import com.imanhaikal.memo.data.RecurringRuleDao
+import com.imanhaikal.memo.data.RoomTransactionRunner
 import com.imanhaikal.memo.data.TransactionDao
 import com.imanhaikal.memo.data.receipt.GeminiReceiptScanner
 import com.imanhaikal.memo.data.receipt.GeminiReceiptService
@@ -96,7 +97,7 @@ class DefaultAppContainer(private val context: Application) : AppContainer {
 
     override val budgetRepository: BudgetRepository by lazy {
         BudgetRepository(
-            database = database,
+            runInTransaction = RoomTransactionRunner(database),
             budgetDao = budgetDao,
             budgetCycleDao = budgetCycleDao,
             categoryCapDao = categoryCapDao,

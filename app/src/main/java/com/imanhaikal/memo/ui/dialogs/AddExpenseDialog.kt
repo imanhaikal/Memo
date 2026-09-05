@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -37,6 +38,7 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import com.imanhaikal.memo.ui.components.MemoInput
 import com.imanhaikal.memo.data.Category
+import com.imanhaikal.memo.data.TransactionType
 import com.imanhaikal.memo.data.Transaction
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
@@ -98,9 +100,10 @@ fun AddExpenseDialog(
     initialDescription: String? = null,
     initialDateMillis: Long? = null,
     initialDateHasTime: Boolean = true,
+    initialType: TransactionType = TransactionType.EXPENSE,
     // Disable for pre-filled flows (receipt scan) where a stray outside tap would discard data
     dismissOnClickOutside: Boolean = true,
-    onConfirm: (amountCents: Long, note: String, dateMillis: Long?, hasTime: Boolean, category: Category?, description: String) -> Unit,
+    onConfirm: (TransactionDraft) -> Unit,
     onDelete: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
@@ -140,6 +143,10 @@ fun AddExpenseDialog(
                 !(transaction?.description?.ifBlank { null } ?: initialDescription).isNullOrBlank()
         )
     }
+    var type by rememberSaveable(transaction?.id, initialType) {
+        mutableStateOf(transaction?.type ?: initialType)
+    }
+    val isIncome = type == TransactionType.INCOME
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
     var showTimePicker by rememberSaveable { mutableStateOf(false) }
     val amountCents = CurrencyUtils.parseAmountToCents(amountText)
@@ -160,25 +167,45 @@ fun AddExpenseDialog(
                 haptic.success()
                 close {
                     onConfirm(
-                        amountCents,
-                        noteText,
-                        selectedDateMillis,
-                        // An untouched entry is stamped "now", which is a real time
-                        timeExplicit || selectedDateMillis == null,
-                        selectedCategory,
-                        descriptionText.trim()
+                        TransactionDraft(
+                            amountCents = amountCents,
+                            note = noteText,
+                            dateMillis = selectedDateMillis,
+                            // An untouched entry is stamped "now", which is a real time
+                            hasTime = timeExplicit || selectedDateMillis == null,
+                            // Income has no expense category to file it under
+                            category = if (isIncome) null else selectedCategory,
+                            description = descriptionText.trim(),
+                            type = type
+                        )
                     )
                 }
             }
         }
 
         Text(
-            text = if (transaction == null) "Add Expense" else "Edit Expense",
+            text = when {
+                transaction != null -> "Edit Entry"
+                isIncome -> "Add Income"
+                else -> "Add Expense"
+            },
             style = MaterialTheme.typography.titleMedium,
             color = AppColors.TextPrimary
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Above the amount deliberately: the sign is chosen before the number is typed,
+        // and it can't be fat-fingered the way a leading minus could.
+        TypeSelector(
+            selected = type,
+            onSelected = {
+                if (it != type) haptic.tick()
+                type = it
+            }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Amount Input
         MemoInput(
@@ -188,7 +215,7 @@ fun AddExpenseDialog(
                     amountText = it
                 }
             },
-            label = "Amount",
+            label = if (isIncome) "Amount received" else "Amount",
             placeholder = "0.00",
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Decimal,
@@ -277,7 +304,7 @@ fun AddExpenseDialog(
 
         DetailsToggle(
             expanded = detailsExpanded,
-            hasDetails = selectedCategory != null || descriptionText.isNotBlank(),
+            hasDetails = (!isIncome && selectedCategory != null) || descriptionText.isNotBlank(),
             onClick = {
                 haptic.tick()
                 if (detailsExpanded) focusManager.clearFocus()
@@ -293,26 +320,30 @@ fun AddExpenseDialog(
             Column(modifier = Modifier.fillMaxWidth()) {
                 Spacer(modifier = Modifier.height(12.dp))
 
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Category.entries.forEach { category ->
-                        CategoryChip(
-                            category = category,
-                            selected = category == selectedCategory,
-                            onClick = {
-                                haptic.tick()
-                                // Tapping the selected chip clears it (uncategorized)
-                                selectedCategory =
-                                    if (selectedCategory == category) null else category
-                            }
-                        )
+                // The categories are all expense-shaped (Food, Transport, ...), so they
+                // are simply not offered for income rather than shown and ignored.
+                if (!isIncome) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Category.entries.forEach { category ->
+                            CategoryChip(
+                                category = category,
+                                selected = category == selectedCategory,
+                                onClick = {
+                                    haptic.tick()
+                                    // Tapping the selected chip clears it (uncategorized)
+                                    selectedCategory =
+                                        if (selectedCategory == category) null else category
+                                }
+                            )
+                        }
                     }
-                }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
 
                 MemoInput(
                     value = descriptionText,
@@ -389,7 +420,11 @@ fun AddExpenseDialog(
                 shape = RoundedCornerShape(50)
             ) {
                 Text(
-                    text = if (transaction == null) "Add" else "Save",
+                    text = when {
+                        transaction != null -> "Save"
+                        isIncome -> "Add income"
+                        else -> "Add"
+                    },
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
                 )
             }
@@ -509,6 +544,62 @@ fun AddExpenseDialog(
     }
 }
 
+/**
+ * Expense / Income segmented control.
+ *
+ * Amounts are stored as a positive magnitude with the sign carried by the type, so this
+ * is what makes a refund possible without loosening the amount parser — that same parser
+ * validates the total budget field, where a negative value would break the pool maths.
+ */
+@Composable
+private fun TypeSelector(
+    selected: TransactionType,
+    onSelected: (TransactionType) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(50))
+            .background(AppColors.Field)
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        TransactionType.entries.forEach { type ->
+            val isSelected = type == selected
+            val background by animateColorAsState(
+                targetValue = if (isSelected) AppColors.Surface else Color.Transparent,
+                animationSpec = tween(200),
+                label = "typeChipBackground"
+            )
+            val contentColor by animateColorAsState(
+                targetValue = when {
+                    isSelected && type == TransactionType.INCOME -> AppColors.Green
+                    isSelected -> AppColors.TextPrimary
+                    else -> AppColors.TextSecondary
+                },
+                animationSpec = tween(200),
+                label = "typeChipContent"
+            )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(50))
+                    .background(background)
+                    .clickable { onSelected(type) }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (type == TransactionType.INCOME) "Income" else "Expense",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = contentColor
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun DateChip(
     icon: @Composable (tint: Color) -> Unit,
@@ -623,6 +714,6 @@ private fun toLocalDate(millis: Long): LocalDate =
 @Composable
 fun AddExpenseDialogPreview() {
     MemoTheme {
-        AddExpenseDialog(onConfirm = { _, _, _, _, _, _ -> }, onDismiss = {})
+        AddExpenseDialog(onConfirm = {}, onDismiss = {})
     }
 }

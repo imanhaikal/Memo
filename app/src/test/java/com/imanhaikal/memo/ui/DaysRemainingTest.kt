@@ -1,16 +1,8 @@
 package com.imanhaikal.memo.ui
 
-import com.imanhaikal.memo.data.BudgetConfig
-import com.imanhaikal.memo.data.BudgetPreferences
-import com.imanhaikal.memo.data.ThemeMode
-import com.imanhaikal.memo.data.Transaction
-import com.imanhaikal.memo.data.TransactionDao
-import com.imanhaikal.memo.data.receipt.FakeReceiptScanner
-import io.mockk.every
-import io.mockk.mockk
+import com.imanhaikal.memo.testing.MemoTestHarness
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -24,31 +16,16 @@ import java.time.Clock
 import java.time.LocalDate
 import java.time.ZoneId
 
+/** Cycle-length arithmetic across month boundaries, leap years and elapsed cycles. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DaysRemainingTest {
 
-    private lateinit var viewModel: MainViewModel
-    private lateinit var transactionDao: TransactionDao
-    private lateinit var budgetPreferences: BudgetPreferences
     private val testDispatcher = StandardTestDispatcher()
-
-    // Mock data flows
-    private val transactionsFlow = MutableStateFlow<List<Transaction>>(emptyList())
-    private val configFlow = MutableStateFlow(BudgetConfig(100_000L, 0L, 30, "USD"))
-    private val zoneId = ZoneId.systemDefault()
+    private val zoneId: ZoneId = ZoneId.systemDefault()
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        transactionDao = mockk()
-        budgetPreferences = mockk()
-
-        every { transactionDao.getAllTransactions() } returns transactionsFlow
-        every { budgetPreferences.budgetConfig } returns configFlow
-        every { budgetPreferences.themeMode } returns kotlinx.coroutines.flow.flowOf(ThemeMode.SYSTEM)
-        every { budgetPreferences.hapticsEnabled } returns kotlinx.coroutines.flow.flowOf(true)
-
-        viewModel = MainViewModel(transactionDao, budgetPreferences, Clock.systemDefaultZone(), FakeReceiptScanner(), defaultDispatcher = testDispatcher)
     }
 
     @After
@@ -56,126 +33,89 @@ class DaysRemainingTest {
         Dispatchers.resetMain()
     }
 
-    private fun setDate(date: LocalDate) {
-        viewModel = MainViewModel(
-            transactionDao = transactionDao,
-            budgetPreferences = budgetPreferences,
-            clock = Clock.fixed(date.atStartOfDay(zoneId).toInstant(), zoneId),
-            receiptScanner = FakeReceiptScanner(),
-            defaultDispatcher = testDispatcher
-        )
-    }
-
-    private fun setStartDate(date: LocalDate) {
-        val time = date.atStartOfDay(zoneId).toInstant().toEpochMilli()
-        configFlow.value = configFlow.value.copy(cycleStartDateMillis = time)
+    /**
+     * Seeds a budget starting on [start], with the clock fixed to [today], and returns the
+     * resulting days-remaining once the state settles.
+     */
+    private suspend fun daysRemainingFor(
+        start: LocalDate,
+        today: LocalDate,
+        totalDays: Int = 30,
+        collect: (MainViewModel) -> Unit
+    ): Int {
+        val clock = Clock.fixed(today.atStartOfDay(zoneId).toInstant(), zoneId)
+        val harness = MemoTestHarness(clock, today)
+        val viewModel = harness.viewModel(testDispatcher)
+        collect(viewModel)
+        harness.seedBudget(amountCents = 100_000L, totalDays = totalDays, startDate = start)
+        testDispatcher.scheduler.advanceUntilIdle()
+        return viewModel.uiState.value.daysRemaining
     }
 
     @Test
-    fun `Test Start of Cycle - Days remaining should equal total days`() = runTest {
+    fun `start of cycle has the full cycle remaining`() = runTest {
         val today = LocalDate.of(2023, 1, 1)
-        setDate(today)
-        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
-        setStartDate(today)
-        configFlow.value = configFlow.value.copy(totalDays = 30)
-
-        testDispatcher.scheduler.advanceUntilIdle()
-        assertEquals(30, viewModel.uiState.value.daysRemaining)
+        val result = daysRemainingFor(start = today, today = today) { viewModel ->
+            backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+        }
+        assertEquals(30, result)
     }
 
     @Test
-    fun `Test Middle of Cycle - Days remaining should be correct difference`() = runTest {
-        val start = LocalDate.of(2023, 1, 1)
-        val today = LocalDate.of(2023, 1, 16) // 15 days passed
-        setDate(today)
-        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
-        setStartDate(start)
-        configFlow.value = configFlow.value.copy(totalDays = 30)
-
-        // passed = 15. remaining = 30 - 15 = 15.
-        testDispatcher.scheduler.advanceUntilIdle()
-        assertEquals(15, viewModel.uiState.value.daysRemaining)
+    fun `mid cycle counts down by the days that have passed`() = runTest {
+        val result = daysRemainingFor(
+            start = LocalDate.of(2023, 1, 1),
+            today = LocalDate.of(2023, 1, 16)
+        ) { viewModel ->
+            backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+        }
+        assertEquals(15, result)
     }
 
     @Test
-    fun `Test End of Cycle - Last day should have 1 day remaining`() = runTest {
-        val start = LocalDate.of(2023, 1, 1)
-        val today = LocalDate.of(2023, 1, 30) // 29 days passed (if 1st is day 1, 30th is day 30)
-        // ChronoUnit.DAYS.between(1st, 30th) = 29.
-        // Remaining = 30 - 29 = 1.
-        
-        setDate(today)
-        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
-        setStartDate(start)
-        configFlow.value = configFlow.value.copy(totalDays = 30)
-
-        testDispatcher.scheduler.advanceUntilIdle()
-        assertEquals(1, viewModel.uiState.value.daysRemaining)
+    fun `the last day of a cycle has one day remaining`() = runTest {
+        val result = daysRemainingFor(
+            start = LocalDate.of(2023, 1, 1),
+            today = LocalDate.of(2023, 1, 30)
+        ) { viewModel ->
+            backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+        }
+        assertEquals(1, result)
     }
 
     @Test
-    fun `Test Past Cycle - Should roll over to a fresh cycle instead of freezing at 1`() = runTest {
-        val start = LocalDate.of(2023, 1, 1)
-        val today = LocalDate.of(2023, 2, 5) // 35 days after start, one 30-day cycle has fully elapsed
-
-        setDate(today)
-        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
-        setStartDate(start)
-        configFlow.value = configFlow.value.copy(totalDays = 30)
-
-        testDispatcher.scheduler.advanceUntilIdle()
-        // Cycle rolls forward to Jan 31 (start + 30 days), so 5 days have passed in the new cycle.
-        // Remaining = 30 - 5 = 25.
-        assertEquals(25, viewModel.uiState.value.daysRemaining)
+    fun `an elapsed cycle rolls over into a fresh one instead of freezing at one day`() = runTest {
+        // 35 days after the start, so one whole 30-day cycle has finished. The new cycle
+        // began on Jan 31, putting today 5 days in.
+        val result = daysRemainingFor(
+            start = LocalDate.of(2023, 1, 1),
+            today = LocalDate.of(2023, 2, 5)
+        ) { viewModel ->
+            backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+        }
+        assertEquals(25, result)
     }
 
     @Test
-    fun `Test Leap Year - Should handle Feb 29 correctly`() = runTest {
-        // Leap year 2024
-        val start = LocalDate.of(2024, 2, 28)
-        val today = LocalDate.of(2024, 3, 1) 
-        
-        // 2024 is leap. Feb 29 exists.
-        // 28 Feb -> 29 Feb -> 1 Mar
-        // Days passed should be 2.
-        
-        setDate(today)
-        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
-        setStartDate(start)
-        configFlow.value = configFlow.value.copy(totalDays = 30)
-
-        testDispatcher.scheduler.advanceUntilIdle()
-        
-        // Expected passed = 2 (28->29 (1), 29->1 (1) -> total 2? No, between counts days.
-        // 28 to 1st March.
-        // 28 (start)
-        // 29
-        // 1 (current)
-        // between(28, 1) = 2 days.
-        // remaining = 30 - 2 = 28.
-
-        assertEquals(28, viewModel.uiState.value.daysRemaining)
+    fun `leap day counts as a real day`() = runTest {
+        // 2024 is a leap year: 28 Feb -> 29 Feb -> 1 Mar is two days.
+        val result = daysRemainingFor(
+            start = LocalDate.of(2024, 2, 28),
+            today = LocalDate.of(2024, 3, 1)
+        ) { viewModel ->
+            backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+        }
+        assertEquals(28, result)
     }
-    
+
     @Test
-    fun `Test Non-Leap Year - Should handle Feb 28 to Mar 1 correctly`() = runTest {
-        // Non-Leap year 2023
-        val start = LocalDate.of(2023, 2, 28)
-        val today = LocalDate.of(2023, 3, 1) 
-        
-        // 28 Feb -> 1 Mar
-        // Days passed should be 1.
-        
-        setDate(today)
-        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
-        setStartDate(start)
-        configFlow.value = configFlow.value.copy(totalDays = 30)
-
-        testDispatcher.scheduler.advanceUntilIdle()
-        
-        // between(28, 1) = 1 day.
-        // remaining = 30 - 1 = 29.
-
-        assertEquals(29, viewModel.uiState.value.daysRemaining)
+    fun `a non-leap February rolls straight into March`() = runTest {
+        val result = daysRemainingFor(
+            start = LocalDate.of(2023, 2, 28),
+            today = LocalDate.of(2023, 3, 1)
+        ) { viewModel ->
+            backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+        }
+        assertEquals(29, result)
     }
 }

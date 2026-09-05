@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -32,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -68,6 +70,9 @@ import kotlinx.coroutines.launch
 fun DashboardScreen(
     state: BudgetUiState,
     onOpenSettings: () -> Unit,
+    onOpenBudgets: () -> Unit,
+    onOpenHistory: () -> Unit,
+    onOpenCategoryCaps: () -> Unit,
     onAddExpense: () -> Unit,
     onEditTransaction: (Transaction) -> Unit,
     onDeleteTransaction: (Transaction) -> Unit,
@@ -113,20 +118,43 @@ fun DashboardScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Memo.",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Black, // Heavier weight for premium feel
-                            fontSize = MaterialTheme.typography.titleLarge.fontSize * 1.2f // Slightly larger
-                        ),
-                        color = AppColors.TextPrimary
-                    )
-                    MemoIconButton(
-                        onClick = onOpenSettings,
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Settings",
-                        tint = AppColors.TextSecondary
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Memo.",
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Black, // Heavier weight for premium feel
+                                fontSize = MaterialTheme.typography.titleLarge.fontSize * 1.2f // Slightly larger
+                            ),
+                            color = AppColors.TextPrimary
+                        )
+                        // Only surfaced once a second budget exists, so single-budget
+                        // users never see chrome for a feature they don't use.
+                        if (state.allBudgets.size > 1) {
+                            Text(
+                                text = state.budgetName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = AppColors.TextSecondary,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .clickable(onClick = onOpenBudgets)
+                                    .padding(vertical = 2.dp)
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        MemoIconButton(
+                            onClick = onOpenHistory,
+                            imageVector = Icons.Default.DateRange,
+                            contentDescription = "Cycle history",
+                            tint = AppColors.TextSecondary
+                        )
+                        MemoIconButton(
+                            onClick = onOpenSettings,
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = AppColors.TextSecondary
+                        )
+                    }
                 }
             }
         }
@@ -173,6 +201,7 @@ fun DashboardScreen(
                 StaggeredEntrance(index = 4, play = playEntrance) {
                     CategoryBreakdownCard(
                         categoryTotals = state.categoryTotals,
+                        onEditCaps = onOpenCategoryCaps,
                         currencyCode = state.currencyCode,
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
@@ -200,33 +229,43 @@ fun DashboardScreen(
                 )
             }
 
+            // Older cycles used to be dumped inline here, which made spending that no
+            // longer counts look like it still did. They now live in the history screen.
             if (olderGroups.isNotEmpty()) {
-                item(key = "previous-cycles-header", contentType = "section-header") {
-                    Column(
+                item(key = "previous-cycles-link", contentType = "section-header") {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
                             .padding(top = 16.dp)
-                            .animateItem()
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable(onClick = onOpenHistory)
+                            .padding(horizontal = 8.dp, vertical = 12.dp)
+                            .animateItem(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Column {
+                            Text(
+                                text = "Previous cycles",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = AppColors.TextPrimary
+                            )
+                            Text(
+                                text = "Not counted in the current budget",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = AppColors.TextTertiary
+                            )
+                        }
                         Text(
-                            text = "Previous Cycles",
-                            style = MaterialTheme.typography.titleMedium,
+                            text = "VIEW",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Black
+                            ),
                             color = AppColors.TextPrimary
-                        )
-                        Text(
-                            text = "Not counted in the current budget",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = AppColors.TextTertiary
                         )
                     }
                 }
-                dayGroupItems(
-                    groups = olderGroups,
-                    currencyCode = state.currencyCode,
-                    onEditTransaction = onEditTransaction,
-                    onDeleteTransaction = onDeleteTransaction
-                )
             }
         } else {
             item {

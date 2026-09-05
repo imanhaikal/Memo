@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -98,12 +100,20 @@ fun CycleProgressCard(
     }
 }
 
-/** Per-category totals for the active cycle, largest first. */
+/**
+ * Per-category totals for the active cycle, largest first.
+ *
+ * A category with a cap is measured against that cap; an uncapped one is measured against
+ * the largest category, which is only a relative sense of scale. Mixing the two in one
+ * chart is deliberate — a cap is the more meaningful denominator whenever the user has
+ * set one.
+ */
 @Composable
 fun CategoryBreakdownCard(
     categoryTotals: List<CategoryTotal>,
     currencyCode: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onEditCaps: (() -> Unit)? = null
 ) {
     val maxTotal = categoryTotals.maxOfOrNull { it.totalCents } ?: return
 
@@ -116,11 +126,28 @@ fun CategoryBreakdownCard(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Text(
-                text = "THIS CYCLE BY CATEGORY",
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
-                color = AppColors.TextSecondary
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "THIS CYCLE BY CATEGORY",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
+                    color = AppColors.TextSecondary
+                )
+                if (onEditCaps != null) {
+                    Text(
+                        text = "LIMITS",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
+                        color = AppColors.TextPrimary,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .clickable(onClick = onEditCaps)
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+            }
 
             categoryTotals.forEach { entry ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -142,15 +169,24 @@ fun CategoryBreakdownCard(
                                 color = AppColors.TextPrimary
                             )
                             Text(
-                                text = CurrencyUtils.formatCurrency(entry.totalCents, currencyCode),
+                                text = if (entry.capCents != null) {
+                                    CurrencyUtils.formatCurrency(entry.totalCents, currencyCode) +
+                                        " / " +
+                                        CurrencyUtils.formatCurrency(entry.capCents, currencyCode)
+                                } else {
+                                    CurrencyUtils.formatCurrency(entry.totalCents, currencyCode)
+                                },
                                 style = MaterialTheme.typography.labelSmall,
-                                color = AppColors.TextSecondary
+                                color = if (entry.isOverCap) AppColors.Red else AppColors.TextSecondary
                             )
                         }
                         Spacer(modifier = Modifier.height(6.dp))
+                        val denominator = entry.capCents ?: maxTotal
                         ProgressTrack(
-                            fraction = (entry.totalCents.toFloat() / maxTotal).coerceIn(0f, 1f),
-                            fillColor = AppColors.Yellow,
+                            fraction = if (denominator > 0) {
+                                (entry.totalCents.toFloat() / denominator).coerceIn(0f, 1f)
+                            } else 0f,
+                            fillColor = if (entry.isOverCap) AppColors.Red else AppColors.Yellow,
                             height = 6.dp
                         )
                     }
@@ -161,7 +197,7 @@ fun CategoryBreakdownCard(
 }
 
 @Composable
-private fun ProgressTrack(
+internal fun ProgressTrack(
     fraction: Float,
     fillColor: androidx.compose.ui.graphics.Color,
     height: androidx.compose.ui.unit.Dp

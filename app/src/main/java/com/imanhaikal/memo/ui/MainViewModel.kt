@@ -254,6 +254,19 @@ class MainViewModel(
         }
     }
 
+    /** Per-category limits for the active budget, for the caps editor. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val categoryCaps: StateFlow<Map<Category, Long>> =
+        budgetRepository.observeActiveBudget()
+            .flatMapLatest { budget ->
+                if (budget == null) flowOf(emptyMap()) else budgetRepository.observeCaps(budget.id)
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyMap()
+            )
+
     /** Closed cycles for the active budget, newest first, with totals attached. */
     @OptIn(ExperimentalCoroutinesApi::class)
     val cycleHistory: StateFlow<List<CycleSummary>> =
