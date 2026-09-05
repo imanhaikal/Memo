@@ -8,26 +8,42 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.imanhaikal.memo.MemoApplication
+import com.imanhaikal.memo.data.Budget
+import com.imanhaikal.memo.data.BudgetCycle
 import com.imanhaikal.memo.data.BudgetPreferences
+import com.imanhaikal.memo.data.BudgetRepository
 import com.imanhaikal.memo.data.Category
+import com.imanhaikal.memo.data.CycleTotals
 import com.imanhaikal.memo.data.ThemeMode
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.data.TransactionDao
+import com.imanhaikal.memo.data.TransactionType
 import com.imanhaikal.memo.data.receipt.ReceiptScanner
 import com.imanhaikal.memo.data.receipt.ScanFailureReason
 import com.imanhaikal.memo.data.receipt.ScanOutcome
 import com.imanhaikal.memo.domain.BudgetCalculatorUseCase
+import com.imanhaikal.memo.domain.DayTicker
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Clock
+import java.time.LocalDate
 
 enum class BudgetStatus {
     ON_TRACK, CAREFUL, OVER_LIMIT
@@ -51,7 +67,17 @@ sealed interface ScanState {
 /** Total spent in the active cycle for one category; null category = uncategorized. */
 data class CategoryTotal(
     val category: Category?,
-    val totalCents: Long
+    val totalCents: Long,
+    /** The user's limit for this category, or null when uncapped. */
+    val capCents: Long? = null,
+    val isOverCap: Boolean = false
+)
+
+/** One finished cycle plus its totals, computed from the transactions still on file. */
+@Immutable
+data class CycleSummary(
+    val cycle: BudgetCycle,
+    val totals: CycleTotals
 )
 
 data class BudgetUiState(
@@ -63,21 +89,34 @@ data class BudgetUiState(
     val transactions: List<Transaction> = emptyList(),
     val status: BudgetStatus = BudgetStatus.ON_TRACK,
     val totalBudget: Long = 0L,
+    /** Net of income, matching the pool arithmetic. */
     val spentToday: Long = 0L,
     val spentThisCycle: Long = 0L,
+    /** Gross figures, for display where "spent" and "received" are shown separately. */
+    val expenseThisCycle: Long = 0L,
+    val incomeThisCycle: Long = 0L,
     val categoryTotals: List<CategoryTotal> = emptyList(),
-    /** First day of the active (rolled-forward) cycle; null until setup completes. */
-    val cycleStartDate: java.time.LocalDate? = null,
+    /** First day of the active cycle; null until setup completes. */
+    val cycleStartDate: LocalDate? = null,
     val totalDays: Int = 30,
-    val currencyCode: String = "MYR"
+    val currencyCode: String = "MYR",
+    val budgetId: Long = 0L,
+    val budgetName: String = "",
+    val cycleIndex: Int = 0,
+    val allBudgets: List<Budget> = emptyList(),
+    val today: LocalDate? = null,
+    val daysPassed: Int = 0
 )
 
 class MainViewModel(
+    private val budgetRepository: BudgetRepository,
     private val transactionDao: TransactionDao,
     private val budgetPreferences: BudgetPreferences,
     private val clock: Clock,
     private val receiptScanner: ReceiptScanner,
-    private val budgetCalculator: BudgetCalculatorUseCase = BudgetCalculatorUseCase(clock),
+    private val dayTicker: DayTicker,
+    private val startupMigration: Deferred<Unit>,
+    private val budgetCalculator: BudgetCalculatorUseCase = BudgetCalculatorUseCase(clock.zone),
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) : ViewModel() {
 
@@ -111,36 +150,127 @@ class MainViewModel(
 
     val isScanAvailable: Boolean get() = receiptScanner.isAvailable
 
-    val uiState: StateFlow<BudgetUiState> = combine(
-        transactionDao.getAllTransactions(),
-        budgetPreferences.budgetConfig
-    ) { transactions, config ->
-        budgetCalculator.calculate(
-            transactions = transactions,
-            totalBudgetCents = config.totalBudgetCents,
-            cycleStartDateMillis = config.cycleStartDateMillis,
-            totalDays = config.totalDays,
-            currencyCode = config.currencyCode
-        )
-        // The calculation is O(n) over all transactions with per-item date
-        // conversions; keep it off the main thread.
+    /**
+     * Waits for the DataStore → Room handoff before emitting anything but `isLoading`.
+     * The splash screen is held on `isLoading`, so an upgrading user never sees the setup
+     * dialog flash over their existing data.
+     */
+    val uiState: StateFlow<BudgetUiState> = flow {
+        startupMigration.await()
+        emitAll(budgetStateFlow())
     }.flowOn(defaultDispatcher).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = BudgetUiState(isLoading = true)
     )
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun budgetStateFlow(): Flow<BudgetUiState> =
+        combine(
+            budgetRepository.observeActiveBudget(),
+            dayTicker.today
+        ) { budget, today -> budget to today }
+            .flatMapLatest { (budget, today) ->
+                if (budget == null) {
+                    flowOf(BudgetUiState(isLoading = false, isSetup = false))
+                } else {
+                    // Idempotent: archives any elapsed cycle and opens the current one.
+                    // Running it here means a midnight tick rolls the cycle over while the
+                    // app is open, not just on next launch.
+                    val cycle = budgetRepository.ensureCurrentCycle(budget)
+                    combine(
+                        transactionDao.observeForBudget(budget.id),
+                        budgetRepository.observeCaps(budget.id),
+                        budgetRepository.observeBudgets()
+                    ) { transactions, caps, budgets ->
+                        budgetCalculator.calculate(
+                            transactions = transactions,
+                            budget = budget,
+                            cycle = cycle,
+                            caps = caps,
+                            today = today,
+                            allBudgets = budgets
+                        )
+                    }
+                }
+            }
+
+    // ---- Budgets -----------------------------------------------------------------
+
     fun setupBudget(amountCents: Long, days: Int, currency: String = "MYR") {
         viewModelScope.launch {
-            budgetPreferences.saveBudgetSettings(amountCents, clock.millis(), days, currency)
+            budgetRepository.createBudget(
+                name = "Monthly",
+                amountCents = amountCents,
+                totalDays = days,
+                currencyCode = currency
+            )
         }
     }
 
-    fun updateBudget(amountCents: Long, days: Int, currency: String) {
+    fun createBudget(name: String, amountCents: Long, days: Int, currency: String) {
         viewModelScope.launch {
-            budgetPreferences.updateBudgetConfig(amountCents, days, currency)
+            budgetRepository.createBudget(name, amountCents, days, currency)
         }
     }
+
+    /** Edits the active budget in place; the cycle keeps its original start date. */
+    fun updateBudget(amountCents: Long, days: Int, currency: String) {
+        viewModelScope.launch {
+            val active = budgetRepository.resolveActiveBudget() ?: return@launch
+            budgetRepository.updateBudget(
+                active.copy(
+                    amountCents = amountCents,
+                    totalDays = days,
+                    currencyCode = currency
+                )
+            )
+        }
+    }
+
+    fun renameBudget(budgetId: Long, name: String) {
+        viewModelScope.launch {
+            val budget = budgetRepository.observeBudgets().first().firstOrNull { it.id == budgetId }
+            if (budget != null) budgetRepository.updateBudget(budget.copy(name = name))
+        }
+    }
+
+    fun selectBudget(id: Long) {
+        viewModelScope.launch { budgetRepository.setActiveBudget(id) }
+    }
+
+    fun setBudgetArchived(id: Long, archived: Boolean) {
+        viewModelScope.launch { budgetRepository.setArchived(id, archived) }
+    }
+
+    fun deleteBudget(budget: Budget) {
+        viewModelScope.launch { budgetRepository.deleteBudget(budget) }
+    }
+
+    fun setCategoryCap(category: Category, capCents: Long?) {
+        viewModelScope.launch {
+            val active = budgetRepository.resolveActiveBudget() ?: return@launch
+            budgetRepository.setCap(active.id, category, capCents)
+        }
+    }
+
+    /** Closed cycles for the active budget, newest first, with totals attached. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val cycleHistory: StateFlow<List<CycleSummary>> =
+        budgetRepository.observeActiveBudget()
+            .flatMapLatest { budget ->
+                if (budget == null) flowOf(emptyList())
+                else budgetRepository.observeClosedCycles(budget.id)
+            }
+            .map { cycles -> cycles.map { CycleSummary(it, budgetRepository.totalsFor(it)) } }
+            .flowOn(defaultDispatcher)
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyList()
+            )
+
+    // ---- Transactions ------------------------------------------------------------
 
     fun addTransaction(
         amountCents: Long,
@@ -148,18 +278,23 @@ class MainViewModel(
         dateMillis: Long? = null,
         category: Category? = null,
         description: String = "",
-        hasTime: Boolean = true
+        hasTime: Boolean = true,
+        type: TransactionType = TransactionType.EXPENSE
     ) {
         viewModelScope.launch {
-            val newTransaction = Transaction(
-                amount = amountCents,
-                note = note,
-                date = dateMillis ?: clock.millis(),
-                category = category,
-                description = description,
-                hasTime = hasTime
+            val active = budgetRepository.resolveActiveBudget() ?: return@launch
+            transactionDao.insertTransaction(
+                Transaction(
+                    amount = amountCents,
+                    note = note,
+                    date = dateMillis ?: clock.millis(),
+                    category = category,
+                    description = description,
+                    hasTime = hasTime,
+                    budgetId = active.id,
+                    type = type
+                )
             )
-            transactionDao.insertTransaction(newTransaction)
         }
     }
 
@@ -168,6 +303,42 @@ class MainViewModel(
             transactionDao.insertTransaction(transaction)
         }
     }
+
+    fun deleteTransaction(transaction: Transaction) {
+        viewModelScope.launch {
+            transactionDao.deleteTransaction(transaction)
+        }
+    }
+
+    fun restoreTransaction(transaction: Transaction) {
+        viewModelScope.launch {
+            // REPLACE insert with the original id/date puts it back exactly where it was
+            transactionDao.insertTransaction(transaction)
+        }
+    }
+
+    // ---- Destructive ---------------------------------------------------------------
+
+    /**
+     * Clears the active budget's transactions and history but keeps the budget itself.
+     * Scoped to one budget — the pre-v5 version deleted every row in the database.
+     */
+    fun clearActiveBudgetData() {
+        viewModelScope.launch {
+            val active = budgetRepository.resolveActiveBudget() ?: return@launch
+            budgetRepository.clearBudgetData(active)
+        }
+    }
+
+    /** Deletes the active budget outright, returning the app to setup if it was the last. */
+    fun resetBudget() {
+        viewModelScope.launch {
+            val active = budgetRepository.resolveActiveBudget() ?: return@launch
+            budgetRepository.deleteBudget(active)
+        }
+    }
+
+    // ---- Receipt scanning ------------------------------------------------------------
 
     fun scanReceipt(uri: Uri) {
         scanJob?.cancel()
@@ -197,38 +368,21 @@ class MainViewModel(
         scanJob = null
         _scanState.value = ScanState.Idle
     }
-    
-    fun deleteTransaction(transaction: Transaction) {
-        viewModelScope.launch {
-            transactionDao.deleteTransaction(transaction)
-        }
-    }
-
-    fun restoreTransaction(transaction: Transaction) {
-        viewModelScope.launch {
-            // REPLACE insert with the original id/date puts it back exactly where it was
-            transactionDao.insertTransaction(transaction)
-        }
-    }
-
-    fun resetBudget() {
-        viewModelScope.launch {
-            // Clear transactions
-            transactionDao.deleteAllTransactions()
-            // Reset preferences (setting budget to 0 effectively un-sets it based on our isSetup logic)
-            budgetPreferences.saveBudgetSettings(0L, clock.millis(), 30)
-        }
-    }
 
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
-                val application = (this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as MemoApplication)
+                val application =
+                    (this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as MemoApplication)
+                val container = application.container
                 MainViewModel(
-                    transactionDao = application.container.transactionDao,
-                    budgetPreferences = application.container.budgetPreferences,
-                    clock = application.container.clock,
-                    receiptScanner = application.container.receiptScanner
+                    budgetRepository = container.budgetRepository,
+                    transactionDao = container.transactionDao,
+                    budgetPreferences = container.budgetPreferences,
+                    clock = container.clock,
+                    receiptScanner = container.receiptScanner,
+                    dayTicker = container.dayTicker,
+                    startupMigration = container.startupMigration
                 )
             }
         }
