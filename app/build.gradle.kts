@@ -66,6 +66,10 @@ android {
     sourceSets {
         // Exported Room schemas, so MigrationTestHelper can load historical versions
         getByName("androidTest").assets.srcDir("$projectDir/schemas")
+        // In-memory fakes and the ViewModel harness, shared by JVM and instrumented
+        // tests so the DAO doubles don't have to be maintained in two places.
+        getByName("test").java.srcDir("src/sharedTest/java")
+        getByName("androidTest").java.srcDir("src/sharedTest/java")
     }
 }
 

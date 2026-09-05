@@ -4,7 +4,7 @@ import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.testing.MemoTestHarness
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.ExperimentalCoroutinesApi as ExperimentalApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -71,6 +71,35 @@ class MainViewModelSettingsTest {
         // Editing the budget must not silently restart the cycle underneath the user.
         assertEquals(seeded.firstCycleStartDate, updated.firstCycleStartDate)
         assertEquals(1, harness.transactionDao.rows.value.size)
+    }
+
+    @Test
+    fun `raising the budget takes effect on the current cycle straight away`() = runTest {
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+        harness.seedBudget(amountCents = 300_000L, totalDays = 30, startDate = today)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(10_000L, viewModel.uiState.value.dailyLimit)
+
+        // The Settings screen tells the user changes apply to the current cycle right
+        // away, so the open cycle has to pick up the new amount rather than waiting.
+        viewModel.updateBudget(600_000L, 30, "MYR")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(600_000L, viewModel.uiState.value.totalBudget)
+        assertEquals(20_000L, viewModel.uiState.value.dailyLimit)
+    }
+
+    @Test
+    fun `shortening the cycle length shortens the days remaining`() = runTest {
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+        harness.seedBudget(amountCents = 300_000L, totalDays = 30, startDate = today)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(30, viewModel.uiState.value.daysRemaining)
+
+        viewModel.updateBudget(300_000L, 15, "MYR")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(15, viewModel.uiState.value.daysRemaining)
     }
 
     @Test

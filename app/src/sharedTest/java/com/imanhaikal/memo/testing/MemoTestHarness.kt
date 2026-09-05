@@ -1,20 +1,14 @@
 package com.imanhaikal.memo.testing
 
 import com.imanhaikal.memo.data.Budget
-import com.imanhaikal.memo.data.BudgetPreferences
 import com.imanhaikal.memo.data.BudgetRepository
-import com.imanhaikal.memo.data.ThemeMode
 import com.imanhaikal.memo.data.receipt.ScanOutcome
 import com.imanhaikal.memo.domain.BudgetCalculatorUseCase
 import com.imanhaikal.memo.domain.CycleMath
 import com.imanhaikal.memo.domain.CycleRolloverUseCase
-import com.imanhaikal.memo.data.receipt.FakeReceiptScanner
 import com.imanhaikal.memo.ui.MainViewModel
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.flow.flowOf
 import java.time.Clock
 import java.time.LocalDate
 
@@ -27,7 +21,7 @@ import java.time.LocalDate
  */
 class MemoTestHarness(
     val clock: Clock,
-    today: LocalDate = LocalDate.now(clock.zone)
+    today: LocalDate = LocalDate.now(clock)
 ) {
     val transactionDao = FakeTransactionDao()
     val budgetDao = FakeBudgetDao()
@@ -52,10 +46,7 @@ class MemoTestHarness(
     )
 
     /** Only theme and haptics are read off this; budget values live in Room now. */
-    val preferences: BudgetPreferences = mockk(relaxed = true) {
-        every { themeMode } returns flowOf(ThemeMode.SYSTEM)
-        every { hapticsEnabled } returns flowOf(true)
-    }
+    val appearance = FakeAppearancePreferences()
 
     /**
      * Seeds a budget the way BudgetBootstrap would, including its open cycle, and makes
@@ -64,7 +55,7 @@ class MemoTestHarness(
     suspend fun seedBudget(
         amountCents: Long,
         totalDays: Int = 30,
-        startDate: LocalDate = LocalDate.now(clock.zone),
+        startDate: LocalDate = LocalDate.now(clock),
         name: String = "Monthly",
         currencyCode: String = "MYR"
     ): Budget {
@@ -78,7 +69,7 @@ class MemoTestHarness(
         )
         val id = budgetDao.insert(budget)
         val stored = budget.copy(id = id)
-        cycleRollover.ensureCurrentCycle(stored)
+        cycleRollover.ensureCurrentCycle(stored, startDate)
         activeBudgetStore.setActiveBudgetId(id)
         return stored
     }
@@ -92,7 +83,7 @@ class MemoTestHarness(
     fun viewModel(dispatcher: CoroutineDispatcher): MainViewModel = MainViewModel(
         budgetRepository = repository,
         transactionDao = transactionDao,
-        budgetPreferences = preferences,
+        appearancePreferences = appearance,
         clock = clock,
         receiptScanner = scanner,
         dayTicker = dayTicker,

@@ -62,6 +62,28 @@ interface BudgetCycleDao {
     @Query("UPDATE budget_cycles SET closedAt = :closedAt WHERE id = :id")
     suspend fun close(id: Long, closedAt: Long)
 
+    /**
+     * Re-syncs an open cycle with its budget after the user edits it.
+     *
+     * Guarded on `closedAt IS NULL`: a finished cycle keeps the amount and dates it
+     * actually ran with, so editing the budget can never rewrite history.
+     */
+    @Query(
+        """
+        UPDATE budget_cycles
+        SET startDate = :startDate,
+            endDateExclusive = :endDateExclusive,
+            budgetAmountCents = :budgetAmountCents
+        WHERE id = :id AND closedAt IS NULL
+        """
+    )
+    suspend fun syncOpenCycle(
+        id: Long,
+        startDate: Long,
+        endDateExclusive: Long,
+        budgetAmountCents: Long
+    )
+
     @Query("DELETE FROM budget_cycles WHERE budgetId = :budgetId")
     suspend fun deleteForBudget(budgetId: Long)
 

@@ -1,6 +1,7 @@
 package com.imanhaikal.memo.testing
 
 import com.imanhaikal.memo.data.ActiveBudgetStore
+import com.imanhaikal.memo.data.AppearancePreferences
 import com.imanhaikal.memo.data.Budget
 import com.imanhaikal.memo.data.BudgetCycle
 import com.imanhaikal.memo.data.BudgetCycleDao
@@ -10,6 +11,7 @@ import com.imanhaikal.memo.data.CategoryCapDao
 import com.imanhaikal.memo.data.CycleTotals
 import com.imanhaikal.memo.data.RecurringRule
 import com.imanhaikal.memo.data.RecurringRuleDao
+import com.imanhaikal.memo.data.ThemeMode
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.data.TransactionDao
 import com.imanhaikal.memo.data.TransactionRunner
@@ -58,6 +60,9 @@ class FakeTransactionDao(initial: List<Transaction> = emptyList()) : Transaction
         .sortedByDescending { it.date }
 
     override suspend fun getAll(): List<Transaction> = rows.value
+
+    /** Snapshot for Compose tests, which poll from outside a coroutine. */
+    fun getTransactionsBlocking(): List<Transaction> = rows.value
 
     override suspend fun insertTransaction(transaction: Transaction) {
         val row = if (transaction.id == 0) transaction.copy(id = nextId.getAndIncrement()) else transaction
@@ -190,6 +195,25 @@ class FakeBudgetCycleDao(
         cycles.forEach { insert(it) }
     }
 
+    override suspend fun syncOpenCycle(
+        id: Long,
+        startDate: Long,
+        endDateExclusive: Long,
+        budgetAmountCents: Long
+    ) {
+        rows.value = rows.value.map { cycle ->
+            if (cycle.id == id && cycle.closedAt == null) {
+                cycle.copy(
+                    startDate = startDate,
+                    endDateExclusive = endDateExclusive,
+                    budgetAmountCents = budgetAmountCents
+                )
+            } else {
+                cycle
+            }
+        }
+    }
+
     override suspend fun close(id: Long, closedAt: Long) {
         rows.value = rows.value.map { if (it.id == id) it.copy(closedAt = closedAt) else it }
     }
@@ -269,6 +293,25 @@ class FakeActiveBudgetStore(initial: Long = 1L) : ActiveBudgetStore {
     override val activeBudgetId: Flow<Long> = state
     override suspend fun setActiveBudgetId(id: Long) {
         state.value = id
+    }
+}
+
+class FakeAppearancePreferences(
+    initialTheme: ThemeMode = ThemeMode.SYSTEM,
+    initialHaptics: Boolean = true
+) : AppearancePreferences {
+    private val theme = MutableStateFlow(initialTheme)
+    private val haptics = MutableStateFlow(initialHaptics)
+
+    override val themeMode: Flow<ThemeMode> = theme
+    override val hapticsEnabled: Flow<Boolean> = haptics
+
+    override suspend fun setThemeMode(mode: ThemeMode) {
+        theme.value = mode
+    }
+
+    override suspend fun setHapticsEnabled(enabled: Boolean) {
+        haptics.value = enabled
     }
 }
 

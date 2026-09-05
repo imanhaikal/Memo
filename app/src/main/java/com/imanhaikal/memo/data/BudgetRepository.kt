@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import java.time.Clock
+import java.time.LocalDate
 
 /**
  * The single seam for budget state. The ViewModel, the recurring worker and the widget all
@@ -134,6 +135,8 @@ class BudgetRepository(
         endMillisExclusive = CycleMath.dayStartMillis(cycle.endDateExclusive, clock.zone)
     )
 
-    suspend fun ensureCurrentCycle(budget: Budget): BudgetCycle =
-        cycleRollover.ensureCurrentCycle(budget)
+    suspend fun ensureCurrentCycle(
+        budget: Budget,
+        today: LocalDate = LocalDate.now(clock)
+    ): BudgetCycle = cycleRollover.ensureCurrentCycle(budget, today)
 }

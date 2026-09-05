@@ -3,7 +3,7 @@ package com.imanhaikal.memo.ui
 import android.net.Uri
 import app.cash.turbine.test
 import com.imanhaikal.memo.data.Category
-import com.imanhaikal.memo.data.receipt.FakeReceiptScanner
+import com.imanhaikal.memo.testing.FakeReceiptScanner
 import com.imanhaikal.memo.data.receipt.ScanFailureReason
 import com.imanhaikal.memo.data.receipt.ScanOutcome
 import com.imanhaikal.memo.testing.MemoTestHarness

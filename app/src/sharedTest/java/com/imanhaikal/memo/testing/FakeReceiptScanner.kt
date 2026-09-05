@@ -1,4 +1,8 @@
-package com.imanhaikal.memo.data.receipt
+package com.imanhaikal.memo.testing
+
+import com.imanhaikal.memo.data.receipt.ReceiptScanner
+import com.imanhaikal.memo.data.receipt.ScanFailureReason
+import com.imanhaikal.memo.data.receipt.ScanOutcome
 
 import android.net.Uri
 

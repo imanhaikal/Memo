@@ -10,7 +10,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.imanhaikal.memo.MemoApplication
 import com.imanhaikal.memo.data.Budget
 import com.imanhaikal.memo.data.BudgetCycle
-import com.imanhaikal.memo.data.BudgetPreferences
+import com.imanhaikal.memo.data.AppearancePreferences
 import com.imanhaikal.memo.data.BudgetRepository
 import com.imanhaikal.memo.data.Category
 import com.imanhaikal.memo.data.CycleTotals
@@ -111,7 +111,7 @@ data class BudgetUiState(
 class MainViewModel(
     private val budgetRepository: BudgetRepository,
     private val transactionDao: TransactionDao,
-    private val budgetPreferences: BudgetPreferences,
+    private val appearancePreferences: AppearancePreferences,
     private val clock: Clock,
     private val receiptScanner: ReceiptScanner,
     private val dayTicker: DayTicker,
@@ -124,7 +124,7 @@ class MainViewModel(
     val scanState: StateFlow<ScanState> = _scanState.asStateFlow()
     private var scanJob: kotlinx.coroutines.Job? = null
 
-    val themeMode: StateFlow<ThemeMode> = budgetPreferences.themeMode.stateIn(
+    val themeMode: StateFlow<ThemeMode> = appearancePreferences.themeMode.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = ThemeMode.SYSTEM
@@ -132,11 +132,11 @@ class MainViewModel(
 
     fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch {
-            budgetPreferences.setThemeMode(mode)
+            appearancePreferences.setThemeMode(mode)
         }
     }
 
-    val hapticsEnabled: StateFlow<Boolean> = budgetPreferences.hapticsEnabled.stateIn(
+    val hapticsEnabled: StateFlow<Boolean> = appearancePreferences.hapticsEnabled.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = true
@@ -144,7 +144,7 @@ class MainViewModel(
 
     fun setHapticsEnabled(enabled: Boolean) {
         viewModelScope.launch {
-            budgetPreferences.setHapticsEnabled(enabled)
+            appearancePreferences.setHapticsEnabled(enabled)
         }
     }
 
@@ -177,7 +177,7 @@ class MainViewModel(
                     // Idempotent: archives any elapsed cycle and opens the current one.
                     // Running it here means a midnight tick rolls the cycle over while the
                     // app is open, not just on next launch.
-                    val cycle = budgetRepository.ensureCurrentCycle(budget)
+                    val cycle = budgetRepository.ensureCurrentCycle(budget, today)
                     combine(
                         transactionDao.observeForBudget(budget.id),
                         budgetRepository.observeCaps(budget.id),
@@ -391,7 +391,7 @@ class MainViewModel(
                 MainViewModel(
                     budgetRepository = container.budgetRepository,
                     transactionDao = container.transactionDao,
-                    budgetPreferences = container.budgetPreferences,
+                    appearancePreferences = container.budgetPreferences,
                     clock = container.clock,
                     receiptScanner = container.receiptScanner,
                     dayTicker = container.dayTicker,

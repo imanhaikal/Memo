@@ -46,12 +46,23 @@ interface ActiveBudgetStore {
 }
 
 /**
+ * Theme and haptics. Separated from the DataStore implementation for the same reason as
+ * [ActiveBudgetStore]: it keeps the ViewModel constructible without an Android Context.
+ */
+interface AppearancePreferences {
+    val themeMode: Flow<ThemeMode>
+    val hapticsEnabled: Flow<Boolean>
+    suspend fun setThemeMode(mode: ThemeMode)
+    suspend fun setHapticsEnabled(enabled: Boolean)
+}
+
+/**
  * Device-scoped preferences: which budget is active, appearance, and the one-time
  * flag recording that the pre-v5 DataStore budget has been copied into Room.
  *
  * Budget values themselves now live in the `budgets` table, not here.
  */
-class BudgetPreferences(private val context: Context) : ActiveBudgetStore {
+class BudgetPreferences(private val context: Context) : ActiveBudgetStore, AppearancePreferences {
 
     companion object {
         private val LEGACY_TOTAL_BUDGET_DOUBLE = doublePreferencesKey("total_budget")
@@ -66,22 +77,22 @@ class BudgetPreferences(private val context: Context) : ActiveBudgetStore {
         val MIGRATED_TO_ROOM = booleanPreferencesKey("migrated_to_room")
     }
 
-    val themeMode: Flow<ThemeMode> = context.memoDataStore.data
+    override val themeMode: Flow<ThemeMode> = context.memoDataStore.data
         .map { preferences -> ThemeMode.fromId(preferences[THEME_MODE]) }
         .distinctUntilChanged()
 
-    suspend fun setThemeMode(mode: ThemeMode) {
+    override suspend fun setThemeMode(mode: ThemeMode) {
         context.memoDataStore.edit { preferences ->
             preferences[THEME_MODE] = mode.name
         }
     }
 
     /** In-app haptics switch; the device-wide setting is checked separately. */
-    val hapticsEnabled: Flow<Boolean> = context.memoDataStore.data
+    override val hapticsEnabled: Flow<Boolean> = context.memoDataStore.data
         .map { preferences -> preferences[HAPTICS_ENABLED] ?: true }
         .distinctUntilChanged()
 
-    suspend fun setHapticsEnabled(enabled: Boolean) {
+    override suspend fun setHapticsEnabled(enabled: Boolean) {
         context.memoDataStore.edit { preferences ->
             preferences[HAPTICS_ENABLED] = enabled
         }
