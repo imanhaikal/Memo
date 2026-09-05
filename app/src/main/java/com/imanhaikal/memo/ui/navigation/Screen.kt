@@ -30,6 +30,14 @@ sealed interface Screen {
         override val depth = 2
     }
 
+    data object Recurring : Screen {
+        override val depth = 2
+    }
+
+    data object Search : Screen {
+        override val depth = 2
+    }
+
     /** Serialized token used by the back stack's [androidx.compose.runtime.saveable.Saver]. */
     val token: String
         get() = when (this) {
@@ -38,6 +46,8 @@ sealed interface Screen {
             Budgets -> "budgets"
             CycleHistory -> "cycleHistory"
             CategoryCaps -> "categoryCaps"
+            Recurring -> "recurring"
+            Search -> "search"
         }
 
     companion object {
@@ -47,6 +57,8 @@ sealed interface Screen {
             "budgets" -> Budgets
             "cycleHistory" -> CycleHistory
             "categoryCaps" -> CategoryCaps
+            "recurring" -> Recurring
+            "search" -> Search
             else -> null
         }
     }

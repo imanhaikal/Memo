@@ -7,6 +7,8 @@ import com.imanhaikal.memo.data.receipt.ScanOutcome
 import com.imanhaikal.memo.domain.BudgetCalculatorUseCase
 import com.imanhaikal.memo.domain.CycleMath
 import com.imanhaikal.memo.domain.CycleRolloverUseCase
+import com.imanhaikal.memo.domain.PostRecurringUseCase
+import com.imanhaikal.memo.domain.RecurringScheduleCalculator
 import com.imanhaikal.memo.ui.MainViewModel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -57,6 +59,16 @@ class MemoTestHarness(
         clock = clock
     )
 
+    val postRecurring = PostRecurringUseCase(
+        recurringRuleDao = recurringDao,
+        transactionDao = transactionDao,
+        runInTransaction = ImmediateTransactionRunner,
+        calculator = RecurringScheduleCalculator(),
+        clock = clock
+    )
+
+    val notificationPreferences = FakeNotificationPreferences()
+
     /** Only theme and haptics are read off this; budget values live in Room now. */
     val appearance = FakeAppearancePreferences()
 
@@ -96,6 +108,9 @@ class MemoTestHarness(
         budgetRepository = repository,
         backupRepository = backupRepository,
         transactionDao = transactionDao,
+        recurringRuleDao = recurringDao,
+        postRecurring = postRecurring,
+        notificationPreferences = notificationPreferences,
         appearancePreferences = appearance,
         clock = clock,
         receiptScanner = scanner,

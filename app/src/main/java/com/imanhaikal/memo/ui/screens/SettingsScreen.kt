@@ -60,7 +60,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import android.Manifest
+import android.os.Build
+import com.imanhaikal.memo.data.NotificationSettings
 import com.imanhaikal.memo.data.ThemeMode
+import com.imanhaikal.memo.notifications.MemoNotifications
 import com.imanhaikal.memo.ui.BudgetUiState
 import com.imanhaikal.memo.ui.components.MemoIconButton
 import com.imanhaikal.memo.ui.components.MemoInput
@@ -89,6 +93,9 @@ fun SettingsScreen(
     onOpenBudgets: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenCategoryCaps: () -> Unit,
+    onOpenRecurring: () -> Unit,
+    notificationSettings: NotificationSettings,
+    onNotificationSettingsChange: (NotificationSettings) -> Unit,
     onClearData: () -> Unit,
     onBuildBackup: suspend () -> String,
     onImportBackup: (contents: String, replace: Boolean, onFinished: (String) -> Unit) -> Unit,
@@ -502,9 +509,70 @@ fun SettingsScreen(
                 onClick = onOpenCategoryCaps
             )
             SettingsNavRow(
+                title = "Recurring",
+                subtitle = "Rent, subscriptions and anything else that repeats",
+                onClick = onOpenRecurring
+            )
+            SettingsNavRow(
                 title = "Cycle history",
                 subtitle = "Review finished cycles",
                 onClick = onOpenHistory
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(AppColors.Border)
+        )
+
+        // Notifications Section
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                text = "Notifications",
+                style = MaterialTheme.typography.titleMedium,
+                color = AppColors.TextSecondary
+            )
+
+            // The runtime permission is requested when the first toggle goes on, not at
+            // launch: asking cold, before the user has any reason to say yes, converts
+            // badly and there is no second chance once it's denied twice.
+            val requestPermission = rememberNotificationPermissionRequest { granted ->
+                if (!granted) {
+                    onMessage("Notifications are off for Memo in Android settings")
+                }
+            }
+
+            val applySetting: (NotificationSettings) -> Unit = { updated ->
+                haptic.tick()
+                if (updated.anyEnabled && !notificationSettings.anyEnabled) requestPermission()
+                onNotificationSettingsChange(updated)
+            }
+
+            NotificationToggle(
+                title = "Daily limit",
+                subtitle = "A morning note of what you can spend",
+                checked = notificationSettings.dailyReminder,
+                onCheckedChange = { applySetting(notificationSettings.copy(dailyReminder = it)) }
+            )
+            NotificationToggle(
+                title = "Over limit",
+                subtitle = "When an expense takes you past today's allowance",
+                checked = notificationSettings.overLimit,
+                onCheckedChange = { applySetting(notificationSettings.copy(overLimit = it)) }
+            )
+            NotificationToggle(
+                title = "Cycle summary",
+                subtitle = "How a finished cycle went",
+                checked = notificationSettings.cycleEnd,
+                onCheckedChange = { applySetting(notificationSettings.copy(cycleEnd = it)) }
+            )
+            NotificationToggle(
+                title = "Recurring added",
+                subtitle = "When a scheduled expense is recorded for you",
+                checked = notificationSettings.recurringPosted,
+                onCheckedChange = { applySetting(notificationSettings.copy(recurringPosted = it)) }
             )
         }
 
@@ -809,6 +877,68 @@ private fun ImportBackupDialog(
         titleContentColor = AppColors.TextPrimary,
         textContentColor = AppColors.TextSecondary
     )
+}
+
+/**
+ * Asks for POST_NOTIFICATIONS when needed.
+ *
+ * Below API 33 the permission does not exist and the callback reports granted straight
+ * away, so callers never need a version check of their own.
+ */
+@Composable
+private fun rememberNotificationPermissionRequest(
+    onResult: (Boolean) -> Unit
+): () -> Unit {
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> onResult(granted) }
+
+    return {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            MemoNotifications.hasPermission(context)
+        ) {
+            onResult(true)
+        } else {
+            launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+}
+
+@Composable
+private fun NotificationToggle(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = AppColors.TextPrimary
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = AppColors.TextTertiary
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = AppColors.OnYellow,
+                checkedTrackColor = AppColors.Yellow,
+                uncheckedThumbColor = AppColors.TextTertiary,
+                uncheckedTrackColor = AppColors.Field
+            )
+        )
+    }
 }
 
 /** Full-width outlined action in the Data section. */

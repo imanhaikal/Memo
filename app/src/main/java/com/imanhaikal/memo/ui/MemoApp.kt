@@ -50,6 +50,8 @@ import com.imanhaikal.memo.ui.screens.BudgetsScreen
 import com.imanhaikal.memo.ui.screens.CategoryCapsScreen
 import com.imanhaikal.memo.ui.screens.CycleHistoryScreen
 import com.imanhaikal.memo.ui.screens.DashboardScreen
+import com.imanhaikal.memo.ui.screens.RecurringScreen
+import com.imanhaikal.memo.ui.screens.SearchScreen
 import com.imanhaikal.memo.ui.screens.SettingsScreen
 import com.imanhaikal.memo.ui.theme.AppColors
 import com.imanhaikal.memo.utils.DateLabels
@@ -71,6 +73,10 @@ fun MemoApp(
     val hapticsEnabled by viewModel.hapticsEnabled.collectAsStateWithLifecycle()
     val cycleHistory by viewModel.cycleHistory.collectAsStateWithLifecycle()
     val categoryCaps by viewModel.categoryCaps.collectAsStateWithLifecycle()
+    val recurringRules by viewModel.recurringRules.collectAsStateWithLifecycle()
+    val notificationSettings by viewModel.notificationSettings.collectAsStateWithLifecycle()
+    val searchCriteria by viewModel.searchCriteria.collectAsStateWithLifecycle()
+    val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
 
     // Wraps everything below, so every rememberStrongHaptics() in the tree — including
     // the one this function uses for Undo — sees the user's preference
@@ -195,6 +201,7 @@ fun MemoApp(
                                 onOpenBudgets = { backStack.push(Screen.Budgets) },
                                 onOpenHistory = { backStack.push(Screen.CycleHistory) },
                                 onOpenCategoryCaps = { backStack.push(Screen.CategoryCaps) },
+                                onOpenSearch = { backStack.push(Screen.Search) },
                                 onAddExpense = {
                                     transactionToEditId = null
                                     addAsIncome = false
@@ -220,6 +227,9 @@ fun MemoApp(
                                 onOpenBudgets = { backStack.push(Screen.Budgets) },
                                 onOpenHistory = { backStack.push(Screen.CycleHistory) },
                                 onOpenCategoryCaps = { backStack.push(Screen.CategoryCaps) },
+                                onOpenRecurring = { backStack.push(Screen.Recurring) },
+                                notificationSettings = notificationSettings,
+                                onNotificationSettingsChange = viewModel::updateNotificationSettings,
                                 onSave = { amount, days, currency ->
                                     viewModel.updateBudget(amount, days, currency)
                                 },
@@ -273,6 +283,35 @@ fun MemoApp(
                                 cycles = cycleHistory,
                                 currencyCode = state.currencyCode,
                                 onBack = { backStack.pop() },
+                                contentPadding = innerPadding,
+                                modifier = screenModifier
+                            )
+
+                            Screen.Recurring -> RecurringScreen(
+                                rules = recurringRules,
+                                currencyCode = state.currencyCode,
+                                onSave = viewModel::saveRecurringRule,
+                                onSetPaused = viewModel::setRecurringPaused,
+                                onDelete = viewModel::deleteRecurringRule,
+                                onBack = { backStack.pop() },
+                                contentPadding = innerPadding,
+                                modifier = screenModifier
+                            )
+
+                            Screen.Search -> SearchScreen(
+                                criteria = searchCriteria,
+                                results = searchResults,
+                                currencyCode = state.currencyCode,
+                                onCriteriaChange = viewModel::updateSearch,
+                                onEditTransaction = { transaction ->
+                                    transactionToEditId = transaction.id
+                                    showAddExpenseDialog = true
+                                },
+                                onDeleteTransaction = deleteWithUndo,
+                                onBack = {
+                                    viewModel.clearSearch()
+                                    backStack.pop()
+                                },
                                 contentPadding = innerPadding,
                                 modifier = screenModifier
                             )

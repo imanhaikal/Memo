@@ -20,7 +20,7 @@ import kotlin.math.max
  * rather than being silently rolled forward here, and "today" is injected by the day
  * ticker rather than read from a clock, so both are testable and neither drifts.
  */
-class BudgetCalculatorUseCase(private val zone: ZoneId) {
+class BudgetCalculatorUseCase(internal val zone: ZoneId) {
 
     fun calculate(
         transactions: List<Transaction>,

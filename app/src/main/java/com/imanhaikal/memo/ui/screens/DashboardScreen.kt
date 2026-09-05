@@ -21,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -73,6 +74,7 @@ fun DashboardScreen(
     onOpenBudgets: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenCategoryCaps: () -> Unit,
+    onOpenSearch: () -> Unit,
     onAddExpense: () -> Unit,
     onEditTransaction: (Transaction) -> Unit,
     onDeleteTransaction: (Transaction) -> Unit,
@@ -142,6 +144,12 @@ fun DashboardScreen(
                         }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        MemoIconButton(
+                            onClick = onOpenSearch,
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Search",
+                            tint = AppColors.TextSecondary
+                        )
                         MemoIconButton(
                             onClick = onOpenHistory,
                             imageVector = Icons.Default.DateRange,
@@ -293,7 +301,7 @@ internal const val ENTRANCE_STAGGER_MS = 100L
 internal const val ENTRANCE_DURATION_MS = 300L
 
 /** Day-header + transaction rows for one list section; keys stay unique across sections. */
-private fun LazyListScope.dayGroupItems(
+internal fun LazyListScope.dayGroupItems(
     groups: List<com.imanhaikal.memo.ui.components.DayGroup>,
     currencyCode: String,
     onEditTransaction: (Transaction) -> Unit,

@@ -9,6 +9,8 @@ import com.imanhaikal.memo.data.BudgetDao
 import com.imanhaikal.memo.data.CategoryCap
 import com.imanhaikal.memo.data.CategoryCapDao
 import com.imanhaikal.memo.data.CycleTotals
+import com.imanhaikal.memo.data.NotificationPreferencesStore
+import com.imanhaikal.memo.data.NotificationSettings
 import com.imanhaikal.memo.data.RecurringRule
 import com.imanhaikal.memo.data.RecurringRuleDao
 import com.imanhaikal.memo.data.ThemeMode
@@ -83,6 +85,30 @@ class FakeTransactionDao(initial: List<Transaction> = emptyList()) : Transaction
 
     override suspend fun deleteAllTransactions() {
         rows.value = emptyList()
+    }
+
+    override fun search(
+        budgetId: Long,
+        query: String,
+        categoryId: String?,
+        type: String?,
+        minCents: Long?,
+        maxCents: Long?,
+        fromMillis: Long?,
+        toMillis: Long?
+    ): Flow<List<Transaction>> = rows.map { list ->
+        list.filter { row ->
+            row.budgetId == budgetId &&
+                (query.isEmpty() ||
+                    row.note.contains(query, ignoreCase = true) ||
+                    row.description.contains(query, ignoreCase = true)) &&
+                (categoryId == null || row.category?.id == categoryId) &&
+                (type == null || row.type.id == type) &&
+                (minCents == null || row.amount >= minCents) &&
+                (maxCents == null || row.amount <= maxCents) &&
+                (fromMillis == null || row.date >= fromMillis) &&
+                (toMillis == null || row.date < toMillis)
+        }.sortedByDescending { it.date }
     }
 
     override suspend fun countPostedForRuleOnDay(
@@ -312,6 +338,32 @@ class FakeAppearancePreferences(
 
     override suspend fun setHapticsEnabled(enabled: Boolean) {
         haptics.value = enabled
+    }
+}
+
+class FakeNotificationPreferences : NotificationPreferencesStore {
+    val state = MutableStateFlow(NotificationSettings())
+    private var overLimitDay = Long.MIN_VALUE
+    private var reportedCycle = -1L
+
+    override val settings: Flow<NotificationSettings> = state
+
+    override suspend fun update(settings: NotificationSettings) {
+        state.value = settings
+    }
+
+    override suspend fun current(): NotificationSettings = state.value
+
+    override suspend fun lastOverLimitDay(): Long = overLimitDay
+
+    override suspend fun setLastOverLimitDay(epochDay: Long) {
+        overLimitDay = epochDay
+    }
+
+    override suspend fun lastReportedCycleId(): Long = reportedCycle
+
+    override suspend fun setLastReportedCycleId(cycleId: Long) {
+        reportedCycle = cycleId
     }
 }
 

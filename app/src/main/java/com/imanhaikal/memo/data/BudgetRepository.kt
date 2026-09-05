@@ -129,6 +129,12 @@ class BudgetRepository(
     fun observeClosedCycles(budgetId: Long): Flow<List<BudgetCycle>> =
         budgetCycleDao.observeClosed(budgetId)
 
+    /** The cycle that finished most recently, for the end-of-cycle summary. */
+    suspend fun mostRecentlyClosedCycle(budgetId: Long): BudgetCycle? =
+        budgetCycleDao.getAll()
+            .filter { it.budgetId == budgetId && it.closedAt != null }
+            .maxByOrNull { it.cycleIndex }
+
     suspend fun totalsFor(cycle: BudgetCycle): CycleTotals = budgetCycleDao.getTotals(
         budgetId = cycle.budgetId,
         startMillis = CycleMath.dayStartMillis(cycle.startDate, clock.zone),

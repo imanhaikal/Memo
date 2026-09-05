@@ -8,11 +8,16 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.imanhaikal.memo.MemoApplication
+import com.imanhaikal.memo.work.MemoWorkScheduler
 import com.imanhaikal.memo.data.Budget
 import com.imanhaikal.memo.data.BudgetCycle
 import com.imanhaikal.memo.data.AppearancePreferences
 import com.imanhaikal.memo.data.BudgetRepository
 import com.imanhaikal.memo.data.Category
+import com.imanhaikal.memo.data.NotificationPreferencesStore
+import com.imanhaikal.memo.data.NotificationSettings
+import com.imanhaikal.memo.data.RecurringRule
+import com.imanhaikal.memo.data.RecurringRuleDao
 import com.imanhaikal.memo.data.CycleTotals
 import com.imanhaikal.memo.data.ThemeMode
 import com.imanhaikal.memo.data.Transaction
@@ -27,6 +32,7 @@ import com.imanhaikal.memo.data.receipt.ScanFailureReason
 import com.imanhaikal.memo.data.receipt.ScanOutcome
 import com.imanhaikal.memo.domain.BudgetCalculatorUseCase
 import com.imanhaikal.memo.domain.DayTicker
+import com.imanhaikal.memo.domain.PostRecurringUseCase
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +43,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
@@ -48,6 +55,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Clock
 import java.time.LocalDate
+
+private const val SEARCH_DEBOUNCE_MS = 250L
 
 enum class BudgetStatus {
     ON_TRACK, CAREFUL, OVER_LIMIT
@@ -122,11 +131,16 @@ class MainViewModel(
     private val budgetRepository: BudgetRepository,
     private val backupRepository: BackupRepository,
     private val transactionDao: TransactionDao,
+    private val recurringRuleDao: RecurringRuleDao,
+    private val postRecurring: PostRecurringUseCase,
+    private val notificationPreferences: NotificationPreferencesStore,
     private val appearancePreferences: AppearancePreferences,
     private val clock: Clock,
     private val receiptScanner: ReceiptScanner,
     private val dayTicker: DayTicker,
     private val startupMigration: Deferred<Unit>,
+    /** Lets the app re-schedule background work when the toggles change. */
+    private val onNotificationSettingsChanged: (NotificationSettings) -> Unit = {},
     private val budgetCalculator: BudgetCalculatorUseCase = BudgetCalculatorUseCase(clock.zone),
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) : ViewModel() {
@@ -362,6 +376,103 @@ class MainViewModel(
         }
     }
 
+    // ---- Search ----------------------------------------------------------------------
+
+    private val _searchCriteria = MutableStateFlow(SearchCriteria())
+    val searchCriteria: StateFlow<SearchCriteria> = _searchCriteria.asStateFlow()
+
+    fun updateSearch(criteria: SearchCriteria) {
+        _searchCriteria.value = criteria
+    }
+
+    fun clearSearch() {
+        _searchCriteria.value = SearchCriteria()
+    }
+
+    /**
+     * Search results, filtered in SQL rather than over the in-memory list.
+     *
+     * Debounced so holding down a key doesn't run a query per character.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class, kotlinx.coroutines.FlowPreview::class)
+    val searchResults: StateFlow<List<Transaction>> =
+        combine(
+            budgetRepository.observeActiveBudget(),
+            _searchCriteria.debounce { if (it.query.isBlank()) 0L else SEARCH_DEBOUNCE_MS }
+        ) { budget, criteria -> budget to criteria }
+            .flatMapLatest { (budget, criteria) ->
+                if (budget == null) {
+                    flowOf(emptyList())
+                } else {
+                    transactionDao.search(
+                        budgetId = budget.id,
+                        query = criteria.query.trim(),
+                        categoryId = criteria.category?.id,
+                        type = criteria.type?.id,
+                        minCents = criteria.minCents,
+                        maxCents = criteria.maxCents,
+                        fromMillis = criteria.fromMillis,
+                        toMillis = criteria.toMillis
+                    )
+                }
+            }
+            .flowOn(defaultDispatcher)
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyList()
+            )
+
+    // ---- Recurring -------------------------------------------------------------------
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val recurringRules: StateFlow<List<RecurringRule>> =
+        budgetRepository.observeActiveBudget()
+            .flatMapLatest { budget ->
+                if (budget == null) flowOf(emptyList())
+                else recurringRuleDao.observeForBudget(budget.id)
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyList()
+            )
+
+    fun saveRecurringRule(rule: RecurringRule) {
+        viewModelScope.launch {
+            val active = budgetRepository.resolveActiveBudget() ?: return@launch
+            recurringRuleDao.insert(rule.copy(budgetId = active.id))
+            // Post it immediately if it is already due, rather than waiting for tomorrow.
+            postRecurring.catchUp()
+        }
+    }
+
+    fun setRecurringPaused(rule: RecurringRule, paused: Boolean) {
+        viewModelScope.launch {
+            recurringRuleDao.update(rule.copy(isPaused = paused))
+        }
+    }
+
+    fun deleteRecurringRule(rule: RecurringRule) {
+        viewModelScope.launch { recurringRuleDao.delete(rule) }
+    }
+
+    // ---- Notifications ---------------------------------------------------------------
+
+    val notificationSettings: StateFlow<NotificationSettings> =
+        notificationPreferences.settings.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = NotificationSettings()
+        )
+
+    fun updateNotificationSettings(settings: NotificationSettings) {
+        viewModelScope.launch {
+            notificationPreferences.update(settings)
+            onNotificationSettingsChanged(settings)
+        }
+    }
+
     // ---- Backup ----------------------------------------------------------------------
 
     private val _backupState = MutableStateFlow<BackupState>(BackupState.Idle)
@@ -433,11 +544,17 @@ class MainViewModel(
                     budgetRepository = container.budgetRepository,
                     backupRepository = container.backupRepository,
                     transactionDao = container.transactionDao,
+                    recurringRuleDao = container.recurringRuleDao,
+                    postRecurring = container.postRecurring,
+                    notificationPreferences = container.notificationPreferences,
                     appearancePreferences = container.budgetPreferences,
                     clock = container.clock,
                     receiptScanner = container.receiptScanner,
                     dayTicker = container.dayTicker,
-                    startupMigration = container.startupMigration
+                    startupMigration = container.startupMigration,
+                    onNotificationSettingsChanged = { settings ->
+                        MemoWorkScheduler.sync(application, settings, container.clock)
+                    }
                 )
             }
         }

@@ -8,6 +8,8 @@ import com.imanhaikal.memo.data.BudgetDao
 import com.imanhaikal.memo.data.BudgetPreferences
 import com.imanhaikal.memo.data.BudgetRepository
 import com.imanhaikal.memo.data.CategoryCapDao
+import com.imanhaikal.memo.data.NotificationPreferences
+import com.imanhaikal.memo.data.NotificationPreferencesStore
 import com.imanhaikal.memo.data.PreUpgradeSnapshot
 import com.imanhaikal.memo.data.RecurringRuleDao
 import com.imanhaikal.memo.data.RoomTransactionRunner
@@ -16,14 +18,21 @@ import com.imanhaikal.memo.data.backup.BackupRepository
 import com.imanhaikal.memo.data.receipt.GeminiReceiptScanner
 import com.imanhaikal.memo.data.receipt.GeminiReceiptService
 import com.imanhaikal.memo.data.receipt.ReceiptScanner
+import com.imanhaikal.memo.domain.BudgetCalculatorUseCase
+import com.imanhaikal.memo.domain.BudgetSummaryProvider
 import com.imanhaikal.memo.domain.CycleRolloverUseCase
+import com.imanhaikal.memo.domain.PostRecurringUseCase
+import com.imanhaikal.memo.domain.RecurringScheduleCalculator
 import com.imanhaikal.memo.domain.DayTicker
 import com.imanhaikal.memo.domain.SystemDayTicker
+import com.imanhaikal.memo.notifications.MemoNotifications
+import com.imanhaikal.memo.work.MemoWorkScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import java.time.Clock
 
 class MemoApplication : Application() {
@@ -37,6 +46,22 @@ class MemoApplication : Application() {
         PreUpgradeSnapshot.captureIfNeeded(this)
         container = DefaultAppContainer(this)
         container.startupMigration.start()
+        MemoNotifications.createChannels(this)
+
+        container.applicationScope.launch {
+            container.startupMigration.await()
+            // The worker is the convenience; this is the guarantee. Vendor battery
+            // managers suppress background work for days, and a rent expense that
+            // silently never posts is a data-integrity bug, not a missed reminder.
+            runCatching { container.postRecurring.catchUp() }
+            runCatching {
+                MemoWorkScheduler.sync(
+                    context = this@MemoApplication,
+                    settings = container.notificationPreferences.current(),
+                    clock = container.clock
+                )
+            }
+        }
     }
 }
 
@@ -49,6 +74,9 @@ interface AppContainer {
     val recurringRuleDao: RecurringRuleDao
     val budgetRepository: BudgetRepository
     val backupRepository: BackupRepository
+    val notificationPreferences: NotificationPreferencesStore
+    val postRecurring: PostRecurringUseCase
+    val budgetSummaryProvider: BudgetSummaryProvider
     val budgetPreferences: BudgetPreferences
     val clock: Clock
     val receiptScanner: ReceiptScanner
@@ -121,6 +149,28 @@ class DefaultAppContainer(private val context: Application) : AppContainer {
             activeBudgetStore = budgetPreferences,
             clock = clock,
             appVersionCode = BuildConfig.VERSION_CODE
+        )
+    }
+
+    override val notificationPreferences: NotificationPreferencesStore by lazy {
+        NotificationPreferences(context)
+    }
+
+    override val postRecurring: PostRecurringUseCase by lazy {
+        PostRecurringUseCase(
+            recurringRuleDao = recurringRuleDao,
+            transactionDao = transactionDao,
+            runInTransaction = RoomTransactionRunner(database),
+            calculator = RecurringScheduleCalculator(),
+            clock = clock
+        )
+    }
+
+    override val budgetSummaryProvider: BudgetSummaryProvider by lazy {
+        BudgetSummaryProvider(
+            budgetRepository = budgetRepository,
+            transactionDao = transactionDao,
+            calculator = BudgetCalculatorUseCase(clock.zone)
         )
     }
 
