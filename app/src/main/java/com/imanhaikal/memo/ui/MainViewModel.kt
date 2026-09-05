@@ -1,6 +1,7 @@
 package com.imanhaikal.memo.ui
 
 import android.net.Uri
+import android.util.Log
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -42,6 +43,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.emitAll
@@ -57,6 +59,7 @@ import java.time.Clock
 import java.time.LocalDate
 
 private const val SEARCH_DEBOUNCE_MS = 250L
+private const val TAG = "MainViewModel"
 
 enum class BudgetStatus {
     ON_TRACK, CAREFUL, OVER_LIMIT
@@ -183,11 +186,20 @@ class MainViewModel(
     val uiState: StateFlow<BudgetUiState> = flow {
         startupMigration.await()
         emitAll(budgetStateFlow())
-    }.flowOn(defaultDispatcher).stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = BudgetUiState(isLoading = true)
-    )
+    }
+        // Without this, one throw anywhere upstream ends the flow for good: stateIn keeps
+        // serving the last value and the dashboard silently stops updating, which looks
+        // exactly like a frozen app. Better to surface a blank state than to strand it.
+        .catch { error ->
+            Log.e(TAG, "Budget state failed", error)
+            emit(BudgetUiState(isLoading = false, isSetup = false))
+        }
+        .flowOn(defaultDispatcher)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = BudgetUiState(isLoading = true)
+        )
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun budgetStateFlow(): Flow<BudgetUiState> =

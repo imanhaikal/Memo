@@ -9,13 +9,22 @@ The app features a "Premium Hardware" / "Clean Tech" design aesthetic, focusing 
 *   **Dynamic Budget Engine**: Automatically recalculates daily allowances based on current spending and remaining days.
 *   **Fluid Logic**: Spending less today automatically increases tomorrow's limit.
 *   **Real-time Status**: Visual indicators for "On Track" (Green), "Careful" (Gray), and "Over Limit" (Red) states.
-*   **Persistent Storage**: Transactions are saved using **Room Database**, and budget settings persist via **DataStore**.
+*   **Multiple Budgets**: Run "Travel" alongside "Monthly", each with its own amount, cycle length and currency.
+*   **Income & Refunds**: A refund puts money back in the pool, so the daily limit recovers instead of punishing you for it.
+*   **Cycle History**: Finished cycles are archived with their totals rather than quietly disappearing.
+*   **Category Limits**: Optional per-category caps, shown against spending on the dashboard.
+*   **Recurring Expenses**: Rent and subscriptions post themselves on their due date, whether or not the app is opened.
+*   **Notifications**: Daily limit, over-limit, cycle summary and recurring-posted — all off by default.
+*   **Search**: Text and category filters over your history.
+*   **Home-screen Widget**: "Available today" plus one-tap add, without opening the app.
+*   **Backup & Restore**: A plain, schema-versioned JSON file you save wherever you like.
+*   **Persistent Storage**: **Room Database** (transactions, budgets, cycles, caps, recurring rules) with **DataStore** for device settings.
 *   **Premium Motion & Feel**:
     *   Physics-based rolling numbers.
     *   Tactile spring animations (FAB, Dialogs).
     *   Haptic feedback on interactions.
     *   Staggered entrance animations and smooth transitions.
-*   **Privacy Focused**: All data is stored locally on the device.
+*   **Privacy Focused**: All data is stored locally on the device, and the database is deliberately excluded from Android's cloud backup. Backups are user-driven — nothing leaves the device on its own.
 
 ## 🛠 Tech Stack
 
@@ -25,6 +34,8 @@ The app features a "Premium Hardware" / "Clean Tech" design aesthetic, focusing 
 *   **Persistence**:
     *   Room Database (Transactions)
     *   Jetpack DataStore (Budget Settings)
+*   **Background**: WorkManager (recurring expenses, notifications)
+*   **Widget**: Glance
 *   **Build System**: Gradle (Kotlin DSL)
 *   **Testing**: JUnit, Mockk, Turbine (Unit Tests), Espresso/Compose Test (UI Tests)
 
