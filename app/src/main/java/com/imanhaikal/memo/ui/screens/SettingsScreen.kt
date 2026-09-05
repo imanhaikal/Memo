@@ -1,7 +1,8 @@
 package com.imanhaikal.memo.ui.screens
 
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -9,7 +10,6 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.imeNestedScroll
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -36,13 +37,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,16 +57,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.imanhaikal.memo.data.ThemeMode
 import com.imanhaikal.memo.ui.BudgetUiState
+import com.imanhaikal.memo.ui.components.MemoIconButton
 import com.imanhaikal.memo.ui.components.MemoInput
 import com.imanhaikal.memo.ui.components.PressScale
 import com.imanhaikal.memo.ui.components.springPress
 import com.imanhaikal.memo.ui.theme.AppColors
 import com.imanhaikal.memo.utils.CsvExporter
 import com.imanhaikal.memo.utils.CurrencyUtils
+import com.imanhaikal.memo.utils.dismissKeyboardOnDragDown
 import com.imanhaikal.memo.utils.rememberStrongHaptics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -77,10 +82,14 @@ fun SettingsScreen(
     state: BudgetUiState,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
+    hapticsEnabled: Boolean,
+    onHapticsEnabledChange: (Boolean) -> Unit,
     scanAvailable: Boolean,
     onBack: () -> Unit,
     onSave: (Long, Int, String) -> Unit,
     onReset: () -> Unit,
+    onMessage: (String) -> Unit,
+    modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp)
 ) {
     // Keyed on the saved values so the form resyncs whenever they change
@@ -114,11 +123,9 @@ fun SettingsScreen(
                         } != null
                     }.getOrDefault(false)
                 }
-                Toast.makeText(
-                    context,
-                    if (written) "Exported ${transactions.size} expenses" else "Export failed",
-                    Toast.LENGTH_SHORT
-                ).show()
+                onMessage(
+                    if (written) "Exported ${transactions.size} expenses" else "Export failed"
+                )
             }
         }
     }
@@ -144,7 +151,7 @@ fun SettingsScreen(
     }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             // Match the dashboard: cap and centre the column on wide screens
             .wrapContentWidth(Alignment.CenterHorizontally)
@@ -155,7 +162,7 @@ fun SettingsScreen(
             // Keep the form above the keyboard, moving in sync with the IME's own curve,
             // and let a downward drag on the form dismiss it interactively
             .imePadding()
-            .imeNestedScroll()
+            .dismissKeyboardOnDragDown()
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
@@ -165,13 +172,12 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = AppColors.TextPrimary
-                )
-            }
+            MemoIconButton(
+                onClick = onBack,
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                tint = AppColors.TextPrimary
+            )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "Settings",
@@ -265,6 +271,48 @@ fun SettingsScreen(
                 }
             }
 
+            // Haptics — applies immediately, no Save needed. The device-wide touch
+            // feedback setting still wins over this.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Haptics",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = AppColors.TextPrimary
+                    )
+                    Text(
+                        text = "Subtle vibration on taps, swipes and confirmations.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AppColors.TextTertiary
+                    )
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                // Confirm the switch by feel, but only once the new preference has
+                // actually propagated — ticking inside onCheckedChange fires while
+                // haptics are still disabled, so nothing would be felt.
+                var hapticsWereEnabled by remember { mutableStateOf(hapticsEnabled) }
+                LaunchedEffect(hapticsEnabled) {
+                    if (hapticsEnabled && !hapticsWereEnabled) haptic.tick()
+                    hapticsWereEnabled = hapticsEnabled
+                }
+                Switch(
+                    checked = hapticsEnabled,
+                    onCheckedChange = onHapticsEnabledChange,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = AppColors.OnYellow,
+                        checkedTrackColor = AppColors.Yellow,
+                        checkedBorderColor = AppColors.Yellow,
+                        uncheckedThumbColor = AppColors.TextTertiary,
+                        uncheckedTrackColor = AppColors.Field,
+                        uncheckedBorderColor = AppColors.Border
+                    )
+                )
+            }
+
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     text = "Total Budget",
@@ -307,7 +355,12 @@ fun SettingsScreen(
                         }
                     },
                     placeholder = "30",
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done
+                    ),
+                    // Last field in the form: Done commits rather than just closing
+                    keyboardActions = KeyboardActions(onDone = { if (isValid && hasChanges) performSave() })
                 )
                 if (daysInput.isNotEmpty() && (currentDays == null || currentDays <= 0)) {
                     Text(
@@ -525,11 +578,22 @@ private fun ThemeModeChip(
     onClick: () -> Unit
 ) {
     val interaction = remember { MutableInteractionSource() }
+    // Cross-fade selection rather than hard-swapping the fill
+    val background by animateColorAsState(
+        targetValue = if (selected) AppColors.Yellow else AppColors.Field,
+        animationSpec = tween(durationMillis = 180),
+        label = "themeChipBackground"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (selected) AppColors.OnYellow else AppColors.TextSecondary,
+        animationSpec = tween(durationMillis = 180),
+        label = "themeChipContent"
+    )
     Box(
         modifier = Modifier
             .springPress(interaction, pressedScale = PressScale.Surface)
             .clip(RoundedCornerShape(50))
-            .background(if (selected) AppColors.Yellow else AppColors.Field)
+            .background(background)
             .clickable(
                 interactionSource = interaction,
                 indication = LocalIndication.current,
@@ -542,7 +606,7 @@ private fun ThemeModeChip(
             style = MaterialTheme.typography.labelSmall.copy(
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
             ),
-            color = if (selected) AppColors.OnYellow else AppColors.TextSecondary
+            color = contentColor
         )
     }
 }

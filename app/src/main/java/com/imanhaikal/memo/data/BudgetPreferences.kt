@@ -3,6 +3,7 @@ package com.imanhaikal.memo.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -42,6 +43,7 @@ class BudgetPreferences(private val context: Context) {
         val TOTAL_DAYS = intPreferencesKey("total_days")
         val CURRENCY = stringPreferencesKey("currency_code")
         val THEME_MODE = stringPreferencesKey("theme_mode")
+        val HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
     }
 
     val themeMode: Flow<ThemeMode> = context.dataStore.data
@@ -51,6 +53,17 @@ class BudgetPreferences(private val context: Context) {
     suspend fun setThemeMode(mode: ThemeMode) {
         context.dataStore.edit { preferences ->
             preferences[THEME_MODE] = mode.name
+        }
+    }
+
+    /** In-app haptics switch; the device-wide setting is checked separately. */
+    val hapticsEnabled: Flow<Boolean> = context.dataStore.data
+        .map { preferences -> preferences[HAPTICS_ENABLED] ?: true }
+        .distinctUntilChanged()
+
+    suspend fun setHapticsEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[HAPTICS_ENABLED] = enabled
         }
     }
 

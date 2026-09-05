@@ -97,6 +97,18 @@ class MainViewModel(
         }
     }
 
+    val hapticsEnabled: StateFlow<Boolean> = budgetPreferences.hapticsEnabled.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = true
+    )
+
+    fun setHapticsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            budgetPreferences.setHapticsEnabled(enabled)
+        }
+    }
+
     val isScanAvailable: Boolean get() = receiptScanner.isAvailable
 
     val uiState: StateFlow<BudgetUiState> = combine(

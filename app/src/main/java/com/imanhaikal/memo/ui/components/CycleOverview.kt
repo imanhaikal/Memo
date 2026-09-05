@@ -1,5 +1,10 @@
 package com.imanhaikal.memo.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -160,6 +166,23 @@ private fun ProgressTrack(
     fillColor: androidx.compose.ui.graphics.Color,
     height: androidx.compose.ui.unit.Dp
 ) {
+    // These bars sit directly under a balance that rolls over ~a second; a bar that
+    // jumps to its new value in the same glance gives the mismatch away. No bounce —
+    // an overshoot would briefly show more spent than there is.
+    val animatedFraction by animateFloatAsState(
+        targetValue = fraction,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "progressFraction"
+    )
+    val animatedFill by animateColorAsState(
+        targetValue = fillColor,
+        animationSpec = tween(durationMillis = 240),
+        label = "progressFill"
+    )
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -167,13 +190,15 @@ private fun ProgressTrack(
             .clip(RoundedCornerShape(50))
             .background(AppColors.Field)
     ) {
-        if (fraction > 0f) {
+        if (animatedFraction > 0f) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(fraction)
+                    // Callers already clamp and the spring cannot overshoot, but
+                    // fillMaxWidth throws outside 0..1 and the guard costs nothing.
+                    .fillMaxWidth(animatedFraction.coerceIn(0f, 1f))
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(50))
-                    .background(fillColor)
+                    .background(animatedFill)
             )
         }
     }

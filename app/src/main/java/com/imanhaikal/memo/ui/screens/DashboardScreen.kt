@@ -20,8 +20,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -30,25 +31,36 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.imanhaikal.memo.R
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.ui.BudgetUiState
 import com.imanhaikal.memo.ui.components.CategoryBreakdownCard
 import com.imanhaikal.memo.ui.components.CycleProgressCard
 import com.imanhaikal.memo.ui.components.HeroSection
 import com.imanhaikal.memo.ui.components.MemoCard
+import com.imanhaikal.memo.ui.components.MemoIconButton
 import com.imanhaikal.memo.ui.components.StatsGrid
 import com.imanhaikal.memo.ui.components.TransactionItem
 import com.imanhaikal.memo.ui.components.groupTransactionsByDay
+import com.imanhaikal.memo.ui.components.springPress
 import com.imanhaikal.memo.ui.theme.AppColors
 import com.imanhaikal.memo.utils.CurrencyUtils
+import com.imanhaikal.memo.utils.rememberStrongHaptics
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -56,6 +68,7 @@ import kotlinx.coroutines.launch
 fun DashboardScreen(
     state: BudgetUiState,
     onOpenSettings: () -> Unit,
+    onAddExpense: () -> Unit,
     onEditTransaction: (Transaction) -> Unit,
     onDeleteTransaction: (Transaction) -> Unit,
     modifier: Modifier = Modifier,
@@ -108,13 +121,12 @@ fun DashboardScreen(
                         ),
                         color = AppColors.TextPrimary
                     )
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            tint = AppColors.TextSecondary
-                        )
-                    }
+                    MemoIconButton(
+                        onClick = onOpenSettings,
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Settings",
+                        tint = AppColors.TextSecondary
+                    )
                 }
             }
         }
@@ -219,7 +231,10 @@ fun DashboardScreen(
         } else {
             item {
                 StaggeredEntrance(index = 5, play = playEntrance) {
-                    EmptyTransactions(modifier = Modifier.padding(horizontal = 16.dp))
+                    EmptyTransactions(
+                        onAddExpense = onAddExpense,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
                 }
             }
         }
@@ -324,12 +339,32 @@ fun StaggeredEntrance(
 }
 
 @Composable
-private fun EmptyTransactions(modifier: Modifier = Modifier) {
+private fun EmptyTransactions(
+    onAddExpense: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     MemoCard(modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(AppColors.Field),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_cat_other),
+                    contentDescription = null,
+                    tint = AppColors.TextTertiary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             Text(
                 text = "No expenses yet",
                 style = MaterialTheme.typography.titleMedium,
@@ -338,11 +373,37 @@ private fun EmptyTransactions(modifier: Modifier = Modifier) {
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Tap Add Expense to log your first one — or scan a receipt and let Memo fill it in.",
+                text = "Log your first one below — or scan a receipt and let Memo fill it in.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = AppColors.TextSecondary,
                 textAlign = TextAlign.Center
             )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // The copy used to point at the FAB; give the empty state its own way out
+            val addInteraction = remember { MutableInteractionSource() }
+            val haptic = rememberStrongHaptics()
+            Button(
+                onClick = {
+                    haptic.click()
+                    onAddExpense()
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AppColors.Yellow,
+                    contentColor = AppColors.OnYellow
+                ),
+                interactionSource = addInteraction,
+                modifier = Modifier
+                    .springPress(addInteraction)
+                    .height(48.dp),
+                shape = RoundedCornerShape(50)
+            ) {
+                Text(
+                    text = "Add your first expense",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                )
+            }
         }
     }
 }

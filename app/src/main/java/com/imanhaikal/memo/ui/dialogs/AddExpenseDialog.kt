@@ -1,37 +1,27 @@
 package com.imanhaikal.memo.ui.dialogs
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DatePicker
@@ -59,7 +49,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,15 +56,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import com.imanhaikal.memo.utils.rememberStrongHaptics
@@ -83,8 +70,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.imanhaikal.memo.R
+import com.imanhaikal.memo.ui.components.MemoDialog
 import com.imanhaikal.memo.ui.components.PressScale
 import com.imanhaikal.memo.ui.components.iconRes
 import com.imanhaikal.memo.ui.components.springPress
@@ -93,11 +80,13 @@ import com.imanhaikal.memo.ui.theme.MemoTheme
 import com.imanhaikal.memo.utils.CurrencyUtils
 import com.imanhaikal.memo.utils.DateLabels
 import com.imanhaikal.memo.utils.autoFocusOnceAttached
-import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
+
+/** Longest description we accept; past this the field stops growing and scrolls. */
+private const val DESCRIPTION_MAX_CHARS = 280
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -155,311 +144,254 @@ fun AddExpenseDialog(
     var showTimePicker by rememberSaveable { mutableStateOf(false) }
     val amountCents = CurrencyUtils.parseAmountToCents(amountText)
 
-    val scale = remember { Animatable(0.9f) }
-    val alpha = remember { Animatable(0f) }
     val haptic = rememberStrongHaptics()
     val amountFocusRequester = remember { FocusRequester() }
 
-    val submit = {
-        if (amountCents != null) {
-            haptic.success()
-            onConfirm(
-                amountCents,
-                noteText,
-                selectedDateMillis,
-                // An untouched entry is stamped "now", which is a real time
-                timeExplicit || selectedDateMillis == null,
-                selectedCategory,
-                descriptionText.trim()
-            )
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        launch {
-            scale.animateTo(
-                targetValue = 1f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessLow
-                )
-            )
-        }
-        launch {
-            alpha.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(durationMillis = 300)
-            )
-        }
-    }
-
-    Dialog(
+    MemoDialog(
         onDismissRequest = onDismiss,
-        // Full-size window that doesn't fit system windows: the wrap-content default
-        // lets the window itself pan/clip around the keyboard, which corrupts the
-        // scroll viewport (content scrolls down but can never scroll back up).
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
-        )
-    ) {
-        // Must be read inside the Dialog: its window hosts a separate focus owner,
-        // and the activity's FocusManager cannot clear focus in here.
+        dismissOnClickOutside = dismissOnClickOutside
+    ) { close ->
         val focusManager = LocalFocusManager.current
-        // imePadding on the container bounds the card above the keyboard, so the
-        // inner verticalScroll always has a correct, fully reachable range.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .systemBarsPadding()
-                .imePadding()
-                // The window covers the screen, so outside-tap dismissal is ours now;
-                // the card below swallows its own taps.
-                .pointerInput(dismissOnClickOutside) {
-                    detectTapGestures(onTap = { if (dismissOnClickOutside) onDismiss() })
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            Surface(
-                shape = RoundedCornerShape(32.dp),
-                color = AppColors.Surface,
-                modifier = Modifier
-                    .padding(16.dp)
-                    .widthIn(max = 320.dp)
-                    .fillMaxWidth()
-                    .scale(scale.value)
-                    .alpha(alpha.value)
-            ) {
-            Column(
-                modifier = Modifier
-                    // Tapping non-interactive card area clears focus, hiding the keyboard
-                    // (and swallows the tap so it doesn't dismiss the dialog); children
-                    // (fields, chips, buttons) consume their own taps first.
-                    .pointerInput(Unit) {
-                        detectTapGestures(onTap = { focusManager.clearFocus() })
-                    }
-                    .padding(24.dp)
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = if (transaction == null) "Add Expense" else "Edit Expense",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = AppColors.TextPrimary
-                )
 
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Amount Input
-                MemoInput(
-                    value = amountText,
-                    onValueChange = {
-                        if (CurrencyUtils.isValidAmountInput(it)) {
-                            amountText = it
-                        }
-                    },
-                    label = "Amount",
-                    placeholder = "0.00",
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Decimal,
-                        imeAction = ImeAction.Next
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .autoFocusOnceAttached(amountFocusRequester)
-                )
-
-                // The filter blocks malformed text, so the only invalid non-empty
-                // input left is a zero amount — say so instead of a silently dead button
-                if (amountText.isNotEmpty() && amountCents == null) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Enter an amount greater than zero",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = AppColors.Red,
-                        modifier = Modifier.fillMaxWidth()
+        // Every path that closes the dialog goes through `close`, so the exit
+        // animation plays before the caller's state flag removes it
+        val submit = {
+            if (amountCents != null) {
+                haptic.success()
+                close {
+                    onConfirm(
+                        amountCents,
+                        noteText,
+                        selectedDateMillis,
+                        // An untouched entry is stamped "now", which is a real time
+                        timeExplicit || selectedDateMillis == null,
+                        selectedCategory,
+                        descriptionText.trim()
                     )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Note Input
-                MemoInput(
-                    value = noteText,
-                    onValueChange = { noteText = it },
-                    label = "Note",
-                    placeholder = "e.g. Lunch",
-                    keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Sentences,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(onDone = { submit() }),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    DateChip(
-                        icon = { tint ->
-                            Icon(
-                                imageVector = Icons.Default.DateRange,
-                                contentDescription = "Change date",
-                                tint = tint,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        },
-                        label = selectedDateMillis
-                            ?.let { DateLabels.relativeDayLabel(toLocalDate(it)) }
-                            ?: "Today",
-                        onClick = {
-                            haptic.tick()
-                            showDatePicker = true
-                        }
-                    )
-                    DateChip(
-                        icon = { tint ->
-                            Icon(
-                                painter = painterResource(R.drawable.ic_clock),
-                                contentDescription = "Change time",
-                                tint = tint,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        },
-                        label = when {
-                            timeExplicit -> DateLabels.timeLabel(
-                                selectedDateMillis ?: System.currentTimeMillis()
-                            )
-                            selectedDateMillis == null -> "Now"
-                            else -> "Add time"
-                        },
-                        onClick = {
-                            haptic.tick()
-                            showTimePicker = true
-                        }
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                DetailsToggle(
-                    expanded = detailsExpanded,
-                    hasDetails = selectedCategory != null || descriptionText.isNotBlank(),
-                    onClick = {
-                        haptic.tick()
-                        if (detailsExpanded) focusManager.clearFocus()
-                        detailsExpanded = !detailsExpanded
-                    }
-                )
-
-                AnimatedVisibility(
-                    visible = detailsExpanded,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Category.entries.forEach { category ->
-                                CategoryChip(
-                                    category = category,
-                                    selected = category == selectedCategory,
-                                    onClick = {
-                                        haptic.tick()
-                                        // Tapping the selected chip clears it (uncategorized)
-                                        selectedCategory =
-                                            if (selectedCategory == category) null else category
-                                    }
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        MemoInput(
-                            value = descriptionText,
-                            onValueChange = { descriptionText = it },
-                            label = "Description",
-                            placeholder = "Add more details…",
-                            singleLine = false,
-                            keyboardOptions = KeyboardOptions(
-                                capitalization = KeyboardCapitalization.Sentences
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 96.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(0.dp), // Reset arrangement
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (transaction != null && onDelete != null) {
-                        val deleteInteraction = remember { MutableInteractionSource() }
-                        OutlinedButton(
-                            onClick = {
-                                haptic.tick()
-                                onDelete()
-                            },
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = AppColors.Red
-                            ),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Red),
-                            interactionSource = deleteInteraction,
-                            modifier = Modifier
-                                .springPress(deleteInteraction)
-                                .width(50.dp)
-                                .height(50.dp),
-                            shape = RoundedCornerShape(50),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Delete",
-                                tint = AppColors.Red
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-                    }
-
-                    val confirmInteraction = remember { MutableInteractionSource() }
-                    Button(
-                        onClick = submit,
-                        enabled = amountCents != null,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = AppColors.Yellow,
-                            contentColor = AppColors.OnYellow,
-                            disabledContainerColor = AppColors.Disabled,
-                            disabledContentColor = AppColors.OnDisabled
-                        ),
-                        interactionSource = confirmInteraction,
-                        modifier = Modifier
-                            .springPress(confirmInteraction)
-                            .weight(1f)
-                            .height(50.dp),
-                        shape = RoundedCornerShape(50)
-                    ) {
-                        Text(
-                            text = if (transaction == null) "Add" else "Save",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                        )
-                    }
                 }
             }
+        }
+
+        Text(
+            text = if (transaction == null) "Add Expense" else "Edit Expense",
+            style = MaterialTheme.typography.titleMedium,
+            color = AppColors.TextPrimary
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Amount Input
+        MemoInput(
+            value = amountText,
+            onValueChange = {
+                if (CurrencyUtils.isValidAmountInput(it)) {
+                    amountText = it
+                }
+            },
+            label = "Amount",
+            placeholder = "0.00",
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Decimal,
+                imeAction = ImeAction.Next
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .autoFocusOnceAttached(amountFocusRequester)
+        )
+
+        // The filter blocks malformed text, so the only invalid non-empty
+        // input left is a zero amount — say so instead of a silently dead button
+        if (amountText.isNotEmpty() && amountCents == null) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Enter an amount greater than zero",
+                style = MaterialTheme.typography.labelSmall,
+                color = AppColors.Red,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Note Input
+        MemoInput(
+            value = noteText,
+            onValueChange = { noteText = it },
+            label = "Note",
+            placeholder = "e.g. Lunch",
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Sentences,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(onDone = { submit() }),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            DateChip(
+                icon = { tint ->
+                    Icon(
+                        imageVector = Icons.Default.DateRange,
+                        contentDescription = "Change date",
+                        tint = tint,
+                        modifier = Modifier.size(16.dp)
+                    )
+                },
+                label = selectedDateMillis
+                    ?.let { DateLabels.relativeDayLabel(toLocalDate(it)) }
+                    ?: "Today",
+                onClick = {
+                    haptic.tick()
+                    showDatePicker = true
+                }
+            )
+            DateChip(
+                icon = { tint ->
+                    Icon(
+                        painter = painterResource(R.drawable.ic_clock),
+                        contentDescription = "Change time",
+                        tint = tint,
+                        modifier = Modifier.size(16.dp)
+                    )
+                },
+                label = when {
+                    timeExplicit -> DateLabels.timeLabel(
+                        selectedDateMillis ?: System.currentTimeMillis()
+                    )
+                    selectedDateMillis == null -> "Now"
+                    else -> "Add time"
+                },
+                onClick = {
+                    haptic.tick()
+                    showTimePicker = true
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        DetailsToggle(
+            expanded = detailsExpanded,
+            hasDetails = selectedCategory != null || descriptionText.isNotBlank(),
+            onClick = {
+                haptic.tick()
+                if (detailsExpanded) focusManager.clearFocus()
+                detailsExpanded = !detailsExpanded
+            }
+        )
+
+        AnimatedVisibility(
+            visible = detailsExpanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Category.entries.forEach { category ->
+                        CategoryChip(
+                            category = category,
+                            selected = category == selectedCategory,
+                            onClick = {
+                                haptic.tick()
+                                // Tapping the selected chip clears it (uncategorized)
+                                selectedCategory =
+                                    if (selectedCategory == category) null else category
+                            }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                MemoInput(
+                    value = descriptionText,
+                    onValueChange = {
+                        if (it.length <= DESCRIPTION_MAX_CHARS) descriptionText = it
+                    },
+                    label = "Description",
+                    placeholder = "Add more details…",
+                    singleLine = false,
+                    maxLines = 5,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences
+                    ),
+                    // Grows with the text up to `max`, then scrolls internally instead
+                    // of stretching the dialog
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 96.dp, max = 160.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(0.dp), // Reset arrangement
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (transaction != null && onDelete != null) {
+                val deleteInteraction = remember { MutableInteractionSource() }
+                OutlinedButton(
+                    onClick = {
+                        haptic.tick()
+                        close(onDelete)
+                    },
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = AppColors.Red
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Red),
+                    interactionSource = deleteInteraction,
+                    modifier = Modifier
+                        .springPress(deleteInteraction)
+                        .width(50.dp)
+                        .height(50.dp),
+                    shape = RoundedCornerShape(50),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = AppColors.Red
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+            }
+
+            val confirmInteraction = remember { MutableInteractionSource() }
+            Button(
+                onClick = submit,
+                enabled = amountCents != null,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AppColors.Yellow,
+                    contentColor = AppColors.OnYellow,
+                    disabledContainerColor = AppColors.Disabled,
+                    disabledContentColor = AppColors.OnDisabled
+                ),
+                interactionSource = confirmInteraction,
+                modifier = Modifier
+                    .springPress(confirmInteraction)
+                    .weight(1f)
+                    .height(50.dp),
+                shape = RoundedCornerShape(50)
+            ) {
+                Text(
+                    text = if (transaction == null) "Add" else "Save",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                )
             }
         }
     }
@@ -487,6 +419,7 @@ fun AddExpenseDialog(
             confirmButton = {
                 TextButton(
                     onClick = {
+                        haptic.tick()
                         datePickerState.selectedDateMillis?.let { utcMillis ->
                             val pickedDay = Instant.ofEpochMilli(utcMillis)
                                 .atZone(ZoneOffset.UTC).toLocalDate()
@@ -542,6 +475,7 @@ fun AddExpenseDialog(
                     ) {
                         if (timeExplicit) {
                             TextButton(onClick = {
+                                haptic.tick()
                                 timeExplicit = false
                                 selectedDateMillis = selectedDateMillis?.let(DateLabels::sameDayAtNoon)
                                 showTimePicker = false
@@ -554,6 +488,7 @@ fun AddExpenseDialog(
                             Text("Cancel", color = AppColors.TextSecondary)
                         }
                         TextButton(onClick = {
+                            haptic.tick()
                             timeExplicit = true
                             val combined = DateLabels.combineDateWithPickedTime(
                                 timePickerState.hour,
@@ -585,9 +520,10 @@ private fun DateChip(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .springPress(interaction)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            // Clip before clickable so the touch target matches the pill, not its bounding box
             .clip(RoundedCornerShape(50))
             .background(AppColors.Field)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         icon(AppColors.TextSecondary)
@@ -645,15 +581,24 @@ private fun CategoryChip(
     onClick: () -> Unit
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val background = if (selected) AppColors.Yellow else AppColors.Field
-    val contentColor = if (selected) AppColors.OnYellow else AppColors.TextSecondary
+    // Cross-fade selection rather than hard-swapping the fill
+    val background by animateColorAsState(
+        targetValue = if (selected) AppColors.Yellow else AppColors.Field,
+        animationSpec = tween(durationMillis = 180),
+        label = "categoryChipBackground"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (selected) AppColors.OnYellow else AppColors.TextSecondary,
+        animationSpec = tween(durationMillis = 180),
+        label = "categoryChipContent"
+    )
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .springPress(interaction, pressedScale = PressScale.Surface)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .clip(RoundedCornerShape(50))
             .background(background)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         Icon(

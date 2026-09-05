@@ -55,6 +55,7 @@ class MainViewModelTransactionTest {
         every { transactionDao.getAllTransactions() } returns transactionsFlow
         every { budgetPreferences.budgetConfig } returns configFlow
         every { budgetPreferences.themeMode } returns kotlinx.coroutines.flow.flowOf(ThemeMode.SYSTEM)
+        every { budgetPreferences.hapticsEnabled } returns kotlinx.coroutines.flow.flowOf(true)
         coEvery { transactionDao.insertTransaction(capture(insertedTransaction)) } returns Unit
 
         viewModel = MainViewModel(transactionDao, budgetPreferences, fixedClock, FakeReceiptScanner(), defaultDispatcher = testDispatcher)

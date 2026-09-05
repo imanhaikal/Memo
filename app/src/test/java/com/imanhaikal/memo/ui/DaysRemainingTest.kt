@@ -46,6 +46,7 @@ class DaysRemainingTest {
         every { transactionDao.getAllTransactions() } returns transactionsFlow
         every { budgetPreferences.budgetConfig } returns configFlow
         every { budgetPreferences.themeMode } returns kotlinx.coroutines.flow.flowOf(ThemeMode.SYSTEM)
+        every { budgetPreferences.hapticsEnabled } returns kotlinx.coroutines.flow.flowOf(true)
 
         viewModel = MainViewModel(transactionDao, budgetPreferences, Clock.systemDefaultZone(), FakeReceiptScanner(), defaultDispatcher = testDispatcher)
     }

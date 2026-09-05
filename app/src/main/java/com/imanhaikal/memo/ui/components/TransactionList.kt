@@ -111,8 +111,10 @@ fun TransactionItem(
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = {
             if (it == SwipeToDismissBoxValue.EndToStart) {
-                // Delete immediately; the snackbar's Undo is the safety net
-                haptic.error()
+                // Delete immediately; the snackbar's Undo is the safety net.
+                // A weighted thud, not the error signature — the user asked for this,
+                // nothing failed.
+                haptic.thud()
                 currentOnDelete()
                 true
             } else {

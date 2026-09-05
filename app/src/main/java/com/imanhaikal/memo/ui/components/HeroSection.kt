@@ -1,5 +1,11 @@
 package com.imanhaikal.memo.ui.components
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,11 +64,24 @@ fun HeroSection(
 
 @Composable
 private fun StatusPill(status: BudgetStatus) {
-    val (containerColor, contentColor, text) = when (status) {
+    val (targetContainer, targetContent, text) = when (status) {
         BudgetStatus.OVER_LIMIT -> Triple(AppColors.RedSubtle, AppColors.Red, "Over Limit")
         BudgetStatus.CAREFUL -> Triple(AppColors.Border, AppColors.TextSecondary, "Careful")
         BudgetStatus.ON_TRACK -> Triple(AppColors.GreenSubtle, AppColors.Green, "On Track")
     }
+
+    // Crossing a budget threshold shouldn't blink — the pill shifts colour and swaps
+    // its label through a fade, so the change reads as a transition, not a glitch
+    val containerColor by animateColorAsState(
+        targetValue = targetContainer,
+        animationSpec = tween(durationMillis = 280),
+        label = "statusPillContainer"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = targetContent,
+        animationSpec = tween(durationMillis = 280),
+        label = "statusPillContent"
+    )
 
     Box(
         modifier = Modifier
@@ -69,10 +89,16 @@ private fun StatusPill(status: BudgetStatus) {
             .background(containerColor)
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            color = contentColor
-        )
+        AnimatedContent(
+            targetState = text,
+            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(200)) },
+            label = "statusPillLabel"
+        ) { label ->
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = contentColor
+            )
+        }
     }
 }

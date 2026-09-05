@@ -1,12 +1,7 @@
 package com.imanhaikal.memo.ui.dialogs
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,29 +16,23 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import com.imanhaikal.memo.ui.components.MemoInput
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import com.imanhaikal.memo.utils.rememberStrongHaptics
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
+import com.imanhaikal.memo.ui.components.MemoDialog
 import com.imanhaikal.memo.ui.components.springPress
 import com.imanhaikal.memo.ui.theme.AppColors
 import com.imanhaikal.memo.ui.theme.MemoTheme
@@ -51,7 +40,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import com.imanhaikal.memo.utils.CurrencyUtils
 import com.imanhaikal.memo.utils.autoFocusOnceAttached
-import kotlinx.coroutines.launch
 import java.util.Currency
 import java.util.Locale
 
@@ -75,197 +63,171 @@ fun SetupDialog(
     val days = daysText.toIntOrNull()
     val isValid = amountCents != null && days != null && days > 0
 
-    val scale = remember { Animatable(0.9f) }
-    val alpha = remember { Animatable(0f) }
     val haptic = rememberStrongHaptics()
     val amountFocusRequester = remember { FocusRequester() }
 
-    val submit = {
-        if (amountCents != null && days != null && days > 0) {
-            haptic.success()
-            onConfirm(amountCents, days, selectedCurrency)
+    // Nothing behind this dialog is usable until setup completes, and onDismiss is a
+    // no-op — so an outside tap or back press must not start the exit animation, which
+    // would leave the window in place at zero alpha with no way to bring it back.
+    MemoDialog(
+        onDismissRequest = onDismiss,
+        dismissOnClickOutside = false,
+        dismissOnBackPress = false
+    ) { close ->
+        // Route the confirm through `close` so the dialog plays its exit before the
+        // caller's state flag removes it from the tree
+        val submit = {
+            if (amountCents != null && days != null && days > 0) {
+                haptic.success()
+                close { onConfirm(amountCents, days, selectedCurrency) }
+            }
         }
-    }
 
-    LaunchedEffect(Unit) {
-        launch {
-            scale.animateTo(
-                targetValue = 1f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessLow
-                )
-            )
-        }
-        launch {
-            alpha.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(durationMillis = 300)
-            )
-        }
-    }
+        Text(
+            text = "Welcome",
+            style = MaterialTheme.typography.titleMedium,
+            color = AppColors.TextPrimary
+        )
 
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(32.dp),
-            color = AppColors.Surface,
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Let's set up your budget.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = AppColors.TextSecondary
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Amount Input
+        MemoInput(
+            value = amountText,
+            onValueChange = {
+                if (CurrencyUtils.isValidAmountInput(it)) {
+                    amountText = it
+                }
+            },
+            label = "Total Budget",
+            placeholder = "e.g. 1000",
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Decimal,
+                imeAction = ImeAction.Next
+            ),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
-                .scale(scale.value)
-                .alpha(alpha.value)
-        ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                .autoFocusOnceAttached(amountFocusRequester)
+        )
+
+        if (amountText.isNotEmpty() && amountCents == null) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Enter an amount greater than zero",
+                style = MaterialTheme.typography.labelSmall,
+                color = AppColors.Red,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Days Input
+        MemoInput(
+            value = daysText,
+            onValueChange = { newValue ->
+                if (newValue.all { it.isDigit() }) {
+                    daysText = newValue
+                }
+            },
+            label = "Number of Days",
+            placeholder = "e.g. 30",
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(onDone = { submit() }),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        if (daysText.isNotEmpty() && (days == null || days <= 0)) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Enter at least 1 day",
+                style = MaterialTheme.typography.labelSmall,
+                color = AppColors.Red,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Currency Selector
+        Box(modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = { showCurrencyDropdown = true },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = AppColors.TextPrimary,
+                    containerColor = AppColors.Field
+                ),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.Transparent)
             ) {
                 Text(
-                    text = "Welcome",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = AppColors.TextPrimary
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "Let's set up your budget.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = AppColors.TextSecondary
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Amount Input
-                MemoInput(
-                    value = amountText,
-                    onValueChange = {
-                        if (CurrencyUtils.isValidAmountInput(it)) {
-                            amountText = it
-                        }
-                    },
-                    label = "Total Budget",
-                    placeholder = "e.g. 1000",
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Decimal,
-                        imeAction = ImeAction.Next
-                    ),
+                    text = CurrencyUtils.SUPPORTED_CURRENCIES[selectedCurrency] ?: selectedCurrency,
+                    style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .autoFocusOnceAttached(amountFocusRequester)
-                )
-
-                if (amountText.isNotEmpty() && amountCents == null) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Enter an amount greater than zero",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = AppColors.Red,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Days Input
-                MemoInput(
-                    value = daysText,
-                    onValueChange = { newValue ->
-                        if (newValue.all { it.isDigit() }) {
-                            daysText = newValue
-                        }
-                    },
-                    label = "Number of Days",
-                    placeholder = "e.g. 30",
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(onDone = { submit() }),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                if (daysText.isNotEmpty() && (days == null || days <= 0)) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Enter at least 1 day",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = AppColors.Red,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Currency Selector
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(
-                        onClick = { showCurrencyDropdown = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = AppColors.TextPrimary,
-                            containerColor = AppColors.Field
-                        ),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.Transparent)
-                    ) {
-                        Text(
-                            text = CurrencyUtils.SUPPORTED_CURRENCIES[selectedCurrency] ?: selectedCurrency,
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier
-                                .padding(vertical = 8.dp)
-                                .fillMaxWidth(),
-                            textAlign = TextAlign.Start
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded = showCurrencyDropdown,
-                        onDismissRequest = { showCurrencyDropdown = false },
-                        modifier = Modifier.background(AppColors.Surface)
-                    ) {
-                        CurrencyUtils.SUPPORTED_CURRENCIES.forEach { (code, label) ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = label,
-                                        color = if (code == selectedCurrency) AppColors.TextPrimary else AppColors.TextSecondary,
-                                        fontWeight = if (code == selectedCurrency) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                },
-                                onClick = {
-                                    haptic.tick()
-                                    selectedCurrency = code
-                                    showCurrencyDropdown = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                val confirmInteraction = remember { MutableInteractionSource() }
-                Button(
-                    onClick = submit,
-                    enabled = isValid,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = AppColors.Yellow,
-                        contentColor = AppColors.OnYellow,
-                        disabledContainerColor = AppColors.Disabled,
-                        disabledContentColor = AppColors.OnDisabled
-                    ),
-                    interactionSource = confirmInteraction,
-                    modifier = Modifier
-                        .springPress(confirmInteraction)
+                        .padding(vertical = 8.dp)
                         .fillMaxWidth(),
-                    shape = RoundedCornerShape(50)
-                ) {
-                    Text(
-                        text = "Start Budget",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    textAlign = TextAlign.Start
+                )
+            }
+
+            DropdownMenu(
+                expanded = showCurrencyDropdown,
+                onDismissRequest = { showCurrencyDropdown = false },
+                modifier = Modifier.background(AppColors.Surface)
+            ) {
+                CurrencyUtils.SUPPORTED_CURRENCIES.forEach { (code, label) ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = label,
+                                color = if (code == selectedCurrency) AppColors.TextPrimary else AppColors.TextSecondary,
+                                fontWeight = if (code == selectedCurrency) FontWeight.Bold else FontWeight.Normal
+                            )
+                        },
+                        onClick = {
+                            haptic.tick()
+                            selectedCurrency = code
+                            showCurrencyDropdown = false
+                        }
                     )
                 }
             }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        val confirmInteraction = remember { MutableInteractionSource() }
+        Button(
+            onClick = submit,
+            enabled = isValid,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = AppColors.Yellow,
+                contentColor = AppColors.OnYellow,
+                disabledContainerColor = AppColors.Disabled,
+                disabledContentColor = AppColors.OnDisabled
+            ),
+            interactionSource = confirmInteraction,
+            modifier = Modifier
+                .springPress(confirmInteraction)
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(50)
+        ) {
+            Text(
+                text = "Start Budget",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+            )
         }
     }
 }
