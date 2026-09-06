@@ -114,6 +114,46 @@ class CycleRolloverUseCaseTest {
     }
 
     @Test
+    fun `lengthening the cycle keeps every past cycle and leaves one open`() = runTest {
+        val dao = FakeBudgetCycleDao()
+        val weekly = budget(totalDays = 7)
+        // Three weekly periods have run: 0 and 1 are closed history, 2 is open.
+        rollover(dao).ensureCurrentCycle(weekly, start)
+        rollover(dao).ensureCurrentCycle(weekly, start.plusDays(20))
+        assertEquals(3, dao.rows.value.size)
+
+        // The user switches to a 30-day cycle, which renumbers today back to index 0.
+        val monthly = budget(totalDays = 30)
+        val current = rollover(dao).ensureCurrentCycle(monthly, start.plusDays(20))
+
+        // Neither of the finished weeks may be dropped: `insert` resolves the unique
+        // (budgetId, cycleIndex) constraint with REPLACE, so writing over index 0 used
+        // to delete the first week outright.
+        assertEquals(3, dao.rows.value.size)
+        assertNotNull(dao.rows.value.firstOrNull { it.cycleIndex == 1 })
+        assertNotNull(dao.rows.value.firstOrNull { it.cycleIndex == 2 })
+
+        // And exactly one cycle stays open, spanning today under the new length.
+        assertEquals(listOf(0), dao.rows.value.filter { it.closedAt == null }.map { it.cycleIndex })
+        assertEquals(0, current.cycleIndex)
+        assertEquals(start.toEpochDay(), current.startDate)
+        assertEquals(start.plusDays(30).toEpochDay(), current.endDateExclusive)
+    }
+
+    @Test
+    fun `the reopened cycle is the one the dashboard reads back`() = runTest {
+        val dao = FakeBudgetCycleDao()
+        rollover(dao).ensureCurrentCycle(budget(totalDays = 7), start)
+        rollover(dao).ensureCurrentCycle(budget(totalDays = 7), start.plusDays(20))
+        rollover(dao).ensureCurrentCycle(budget(totalDays = 30), start.plusDays(20))
+
+        val open = dao.getOpenCycle(1L)
+        assertNotNull(open)
+        assertEquals(0, open!!.cycleIndex)
+        assertEquals(start.plusDays(30).toEpochDay(), open.endDateExclusive)
+    }
+
+    @Test
     fun `editing the budget never rewrites a closed cycle`() = runTest {
         val dao = FakeBudgetCycleDao()
         rollover(dao).ensureCurrentCycle(budget(), start)

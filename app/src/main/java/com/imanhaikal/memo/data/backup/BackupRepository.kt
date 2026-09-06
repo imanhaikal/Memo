@@ -146,10 +146,11 @@ class BackupRepository(
     /**
      * Adds what is missing without touching what is there.
      *
-     * Budgets match on name, because ids from another device mean nothing here. Transactions
-     * are deduplicated on the tuple that makes two entries the same expense in practice —
-     * budget, date, amount, type, note and category — so importing the same file twice adds
-     * nothing the second time.
+     * Budgets match on name, because ids from another device mean nothing here; recurring
+     * rules are matched the same way and their ids remapped onto the transactions they
+     * posted. Transactions are deduplicated on the tuple that makes two entries the same
+     * expense in practice — budget, date, amount, type, note and category — so importing
+     * the same file twice adds nothing the second time.
      */
     private suspend fun merge(backup: MemoBackup): ImportResult {
         var importedBudgets = 0
@@ -188,21 +189,31 @@ class BackupRepository(
             }
 
             val existingRules = recurringRuleDao.getAll()
+            val ruleIdMap = mutableMapOf<Long, Long>()
             backup.recurringRules.forEach { incoming ->
                 val budgetId = budgetIdMap[incoming.budgetId] ?: return@forEach
-                val duplicate = existingRules.any {
+                val duplicate = existingRules.firstOrNull {
                     it.budgetId == budgetId && it.note == incoming.note &&
                         it.amountCents == incoming.amountCents && it.cadence.id == incoming.cadence
                 }
-                if (!duplicate) {
-                    recurringRuleDao.insert(incoming.toEntity().copy(id = 0L, budgetId = budgetId))
-                }
+                ruleIdMap[incoming.id] = duplicate?.id
+                    ?: recurringRuleDao.insert(
+                        incoming.toEntity().copy(id = 0L, budgetId = budgetId)
+                    )
             }
 
             val existingKeys = transactionDao.getAll().map { it.dedupeKey() }.toMutableSet()
             backup.transactions.forEach { incoming ->
                 val budgetId = budgetIdMap[incoming.budgetId] ?: return@forEach
-                val entity = incoming.toEntity().copy(id = 0, budgetId = budgetId)
+                val entity = incoming.toEntity().copy(
+                    id = 0,
+                    budgetId = budgetId,
+                    // Rule ids come from the exporting device and mean nothing here.
+                    // Carrying one over would let PostRecurringUseCase's "already posted
+                    // for this rule today" guard match this row against an unrelated
+                    // local rule and silently skip a real occurrence.
+                    recurringRuleId = incoming.recurringRuleId?.let(ruleIdMap::get)
+                )
                 if (existingKeys.add(entity.dedupeKey())) {
                     transactionDao.insertTransaction(entity)
                     importedTransactions++

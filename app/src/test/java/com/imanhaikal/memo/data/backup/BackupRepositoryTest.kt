@@ -17,6 +17,7 @@ import com.imanhaikal.memo.testing.FakeTransactionDao
 import com.imanhaikal.memo.testing.ImmediateTransactionRunner
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -227,6 +228,126 @@ class BackupRepositoryTest {
         assertEquals(999L, target.budgetDao.getById(existingId)!!.amountCents)
         // The imported rows landed on that same budget.
         assertTrue(target.transactionDao.getAll().any { it.note == "Lunch" && it.budgetId == existingId })
+    }
+
+    @Test
+    fun `merge remaps recurring rule ids onto the transactions they posted`() = runTest {
+        // The source device posted rent against its own rule id 1.
+        val source = Fixture(clock).apply {
+            seed()
+            transactionDao.insertTransaction(
+                Transaction(
+                    id = 9,
+                    amount = 120_000L,
+                    note = "Rent",
+                    date = 1_700_000_500_000L,
+                    budgetId = 1L,
+                    recurringRuleId = 1L
+                )
+            )
+        }
+
+        // This device already uses id 1 for something else entirely.
+        val target = Fixture(clock)
+        val budgetId = target.budgetDao.insert(
+            Budget(
+                id = 0L,
+                name = "Monthly",
+                amountCents = 300_000L,
+                totalDays = 30,
+                currencyCode = "MYR",
+                firstCycleStartDate = 19_700L,
+                createdAt = 5L
+            )
+        )
+        val localRuleId = target.ruleDao.insert(
+            RecurringRule(
+                id = 0L,
+                budgetId = budgetId,
+                amountCents = 4_500L,
+                note = "Netflix",
+                cadence = Cadence.MONTHLY,
+                startDate = 19_700L,
+                nextDueDate = 19_730L
+            )
+        )
+
+        target.repository.import(source.repository.export(), ImportMode.MERGE)
+
+        // The imported rent must point at the imported Rent rule, never at Netflix:
+        // countPostedForRuleOnDay would otherwise treat it as Netflix already having
+        // posted that day and silently skip the real occurrence.
+        val rent = target.transactionDao.getAll().single { it.note == "Rent" }
+        val rentRule = target.ruleDao.getAll().single { it.note == "Rent" }
+        assertEquals(rentRule.id, rent.recurringRuleId)
+        assertNotEquals(localRuleId, rent.recurringRuleId)
+        assertEquals(
+            0,
+            target.transactionDao.countPostedForRuleOnDay(localRuleId, 0L, Long.MAX_VALUE)
+        )
+    }
+
+    @Test
+    fun `merge onto a matching rule reuses it rather than importing a second copy`() = runTest {
+        val source = Fixture(clock).apply {
+            seed()
+            transactionDao.insertTransaction(
+                Transaction(
+                    id = 9,
+                    amount = 120_000L,
+                    note = "Rent",
+                    date = 1_700_000_500_000L,
+                    budgetId = 1L,
+                    recurringRuleId = 1L
+                )
+            )
+        }
+
+        val target = Fixture(clock)
+        val budgetId = target.budgetDao.insert(
+            Budget(
+                id = 0L,
+                name = "Monthly",
+                amountCents = 300_000L,
+                totalDays = 30,
+                currencyCode = "MYR",
+                firstCycleStartDate = 19_700L,
+                createdAt = 5L
+            )
+        )
+        // A decoy, so the matched rule's id is not the 1L the source device used and
+        // the assertion below cannot pass by coincidence.
+        target.ruleDao.insert(
+            RecurringRule(
+                id = 0L,
+                budgetId = budgetId,
+                amountCents = 4_500L,
+                note = "Netflix",
+                cadence = Cadence.MONTHLY,
+                startDate = 19_700L,
+                nextDueDate = 19_730L
+            )
+        )
+        // Same note, amount and cadence, so the merge treats it as the same rule.
+        val existingRuleId = target.ruleDao.insert(
+            RecurringRule(
+                id = 0L,
+                budgetId = budgetId,
+                amountCents = 120_000L,
+                note = "Rent",
+                cadence = Cadence.MONTHLY,
+                startDate = 19_700L,
+                nextDueDate = 19_730L
+            )
+        )
+
+        target.repository.import(source.repository.export(), ImportMode.MERGE)
+
+        assertEquals(1, target.ruleDao.getAll().count { it.note == "Rent" })
+        assertEquals(
+            existingRuleId,
+            target.transactionDao.getAll().single { it.note == "Rent" }.recurringRuleId
+        )
     }
 
     @Test

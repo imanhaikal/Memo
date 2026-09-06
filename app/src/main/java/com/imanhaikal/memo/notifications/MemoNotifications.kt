@@ -8,6 +8,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -77,11 +78,18 @@ object MemoNotifications {
     fun showRecurringPosted(context: Context, text: NotificationText) =
         show(context, CHANNEL_RECURRING, ID_RECURRING, text)
 
+    /**
+     * POST_NOTIFICATIONS only exists from API 33. minSdk is 26, and on an older platform
+     * the permission is unknown to the package manager, so `checkSelfPermission` reports
+     * it denied however the manifest declares it — without this guard every notification
+     * would be dropped on Android 8 to 12 while the settings toggles looked healthy.
+     */
     fun hasPermission(context: Context): Boolean =
-        ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.POST_NOTIFICATIONS
-        ) == PackageManager.PERMISSION_GRANTED
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
 
     private fun channel(
         id: String,

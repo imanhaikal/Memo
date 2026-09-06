@@ -191,6 +191,13 @@ class FakeBudgetCycleDao(
     override suspend fun getLatest(budgetId: Long): BudgetCycle? =
         rows.value.filter { it.budgetId == budgetId }.maxByOrNull { it.cycleIndex }
 
+    override suspend fun getByIndex(budgetId: Long, cycleIndex: Int): BudgetCycle? =
+        rows.value.firstOrNull { it.budgetId == budgetId && it.cycleIndex == cycleIndex }
+
+    override suspend fun reopen(id: Long) {
+        rows.value = rows.value.map { if (it.id == id) it.copy(closedAt = null) else it }
+    }
+
     override suspend fun getAll(): List<BudgetCycle> = rows.value
 
     override suspend fun getTotals(

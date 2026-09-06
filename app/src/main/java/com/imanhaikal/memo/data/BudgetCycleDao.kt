@@ -30,6 +30,20 @@ interface BudgetCycleDao {
     @Query("SELECT * FROM budget_cycles WHERE budgetId = :budgetId ORDER BY cycleIndex DESC LIMIT 1")
     suspend fun getLatest(budgetId: Long): BudgetCycle?
 
+    /**
+     * The row already holding [cycleIndex], if any.
+     *
+     * `budget_cycles` is unique on (budgetId, cycleIndex) and [insert] resolves with
+     * REPLACE, so anything about to create a cycle must look here first: replacing would
+     * delete the history row sitting on that index.
+     */
+    @Query("SELECT * FROM budget_cycles WHERE budgetId = :budgetId AND cycleIndex = :cycleIndex")
+    suspend fun getByIndex(budgetId: Long, cycleIndex: Int): BudgetCycle?
+
+    /** Un-closes a cycle that today has fallen back into after a change to its budget. */
+    @Query("UPDATE budget_cycles SET closedAt = NULL WHERE id = :id")
+    suspend fun reopen(id: Long)
+
     @Query("SELECT * FROM budget_cycles")
     suspend fun getAll(): List<BudgetCycle>
 
