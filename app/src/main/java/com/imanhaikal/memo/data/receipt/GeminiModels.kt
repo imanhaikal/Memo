@@ -62,7 +62,6 @@ data class GeminiCandidate(
 data class ReceiptExtraction(
     val total: String = "",
     val note: String = "",
-    val confidence: Double? = null,
     val category: String = "",
     val description: String = "",
     val datetime: String = ""

@@ -2,20 +2,14 @@ package com.imanhaikal.memo.ui
 
 import android.net.Uri
 import app.cash.turbine.test
-import com.imanhaikal.memo.data.BudgetConfig
-import com.imanhaikal.memo.data.BudgetPreferences
-import com.imanhaikal.memo.data.ThemeMode
 import com.imanhaikal.memo.data.Category
-import com.imanhaikal.memo.data.Transaction
-import com.imanhaikal.memo.data.TransactionDao
-import com.imanhaikal.memo.data.receipt.FakeReceiptScanner
+import com.imanhaikal.memo.testing.FakeReceiptScanner
 import com.imanhaikal.memo.data.receipt.ScanFailureReason
 import com.imanhaikal.memo.data.receipt.ScanOutcome
-import io.mockk.every
+import com.imanhaikal.memo.testing.MemoTestHarness
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -32,27 +26,16 @@ import java.time.Clock
 class MainViewModelScanTest {
 
     private lateinit var viewModel: MainViewModel
-    private lateinit var transactionDao: TransactionDao
-    private lateinit var budgetPreferences: BudgetPreferences
+    private lateinit var harness: MemoTestHarness
     private lateinit var scanner: FakeReceiptScanner
     private val testDispatcher = StandardTestDispatcher()
-
-    private val transactionsFlow = MutableStateFlow<List<Transaction>>(emptyList())
-    private val configFlow = MutableStateFlow(BudgetConfig(100_000L, 0L, 30, "MYR"))
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        transactionDao = mockk()
-        budgetPreferences = mockk()
-        scanner = FakeReceiptScanner()
-
-        every { transactionDao.getAllTransactions() } returns transactionsFlow
-        every { budgetPreferences.budgetConfig } returns configFlow
-        every { budgetPreferences.themeMode } returns kotlinx.coroutines.flow.flowOf(ThemeMode.SYSTEM)
-        every { budgetPreferences.hapticsEnabled } returns kotlinx.coroutines.flow.flowOf(true)
-
-        viewModel = MainViewModel(transactionDao, budgetPreferences, Clock.systemDefaultZone(), scanner, defaultDispatcher = testDispatcher)
+        harness = MemoTestHarness(Clock.systemDefaultZone())
+        scanner = harness.scanner
+        viewModel = harness.viewModel(testDispatcher)
     }
 
     @After
@@ -129,13 +112,9 @@ class MainViewModelScanTest {
     fun `scan availability mirrors scanner`() {
         assertTrue(viewModel.isScanAvailable)
 
-        val unavailable = MainViewModel(
-            transactionDao,
-            budgetPreferences,
-            Clock.systemDefaultZone(),
-            FakeReceiptScanner(isAvailable = false),
-            defaultDispatcher = testDispatcher
-        )
-        assertFalse(unavailable.isScanAvailable)
+        val withoutScanner = MemoTestHarness(Clock.systemDefaultZone()).apply {
+            scanner.isAvailable = false
+        }
+        assertFalse(withoutScanner.viewModel(testDispatcher).isScanAvailable)
     }
 }

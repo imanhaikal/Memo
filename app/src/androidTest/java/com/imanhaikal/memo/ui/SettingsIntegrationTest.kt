@@ -13,56 +13,33 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.printToLog
-import androidx.test.platform.app.InstrumentationRegistry
-import com.imanhaikal.memo.data.BudgetPreferences
-import com.imanhaikal.memo.data.Transaction
-import com.imanhaikal.memo.data.TransactionDao
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.map
+import com.imanhaikal.memo.testing.FakeTransactionDao
+import com.imanhaikal.memo.testing.MemoTestHarness
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
-import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import java.time.Clock
-import java.util.concurrent.atomic.AtomicInteger
 
 class SettingsIntegrationTest {
 
     @get:Rule
     val composeTestRule = createComposeRule()
 
-    private lateinit var context: Context
-    private lateinit var preferences: BudgetPreferences
+    private lateinit var harness: MemoTestHarness
     private lateinit var transactionDao: FakeTransactionDao
     private lateinit var viewModel: MainViewModel
 
     @Before
     fun setup() {
-        context = InstrumentationRegistry.getInstrumentation().targetContext
-        preferences = BudgetPreferences(context)
-        transactionDao = FakeTransactionDao()
-        viewModel = MainViewModel(
-            transactionDao,
-            preferences,
-            Clock.systemDefaultZone(),
-            (context.applicationContext as com.imanhaikal.memo.MemoApplication).container.receiptScanner
-        )
+        harness = MemoTestHarness(Clock.systemDefaultZone())
+        transactionDao = harness.transactionDao
+        viewModel = harness.viewModel(Dispatchers.Default)
 
-        // Reset preferences to a known state (Setup Complete) for testing navigation
-        // or Not Setup for testing Reset?
-        // The test cases assume we start at Dashboard, so we need to be SETUP.
         runBlocking {
-            // Setup a default budget so we land on Dashboard
-            preferences.saveBudgetSettings(300_000L, System.currentTimeMillis(), 30)
-        }
-    }
-
-    @After
-    fun tearDown() {
-        runBlocking {
-            preferences.saveBudgetSettings(0L, System.currentTimeMillis(), 30)
+            // Seed a budget so the tests start on the dashboard, not setup
+            harness.seedBudget(amountCents = 300_000L, totalDays = 30)
         }
     }
 
@@ -176,31 +153,4 @@ class SettingsIntegrationTest {
         composeTestRule.onNodeWithText("Welcome").assertIsDisplayed()
     }
 
-    class FakeTransactionDao : TransactionDao {
-        private val transactions = MutableStateFlow<List<Transaction>>(emptyList())
-        private val idCounter = AtomicInteger(0)
-
-        override fun getAllTransactions(): Flow<List<Transaction>> = transactions
-
-        override suspend fun insertTransaction(transaction: Transaction) {
-            val current = transactions.value.toMutableList()
-            if (transaction.id == 0) {
-                current.add(transaction.copy(id = idCounter.incrementAndGet()))
-            } else {
-                current.removeIf { it.id == transaction.id }
-                current.add(transaction)
-            }
-            transactions.value = current
-        }
-
-        override suspend fun deleteTransaction(transaction: Transaction) {
-            val current = transactions.value.toMutableList()
-            current.removeIf { it.id == transaction.id }
-            transactions.value = current
-        }
-
-        override suspend fun deleteAllTransactions() {
-            transactions.value = emptyList()
-        }
-    }
 }

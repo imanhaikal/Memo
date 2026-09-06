@@ -2,21 +2,9 @@ package com.imanhaikal.memo.ui
 
 import android.content.ActivityNotFoundException
 import android.net.Uri
-import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +18,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,13 +27,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.imanhaikal.memo.data.Transaction
+import com.imanhaikal.memo.data.TransactionType
+import com.imanhaikal.memo.data.backup.ImportMode
 import com.imanhaikal.memo.ui.components.DashboardSkeleton
 import com.imanhaikal.memo.ui.components.MemoFab
 import com.imanhaikal.memo.ui.components.MemoScanFab
@@ -53,40 +43,73 @@ import com.imanhaikal.memo.ui.dialogs.ScanErrorDialog
 import com.imanhaikal.memo.ui.dialogs.ScanReceiptChooserSheet
 import com.imanhaikal.memo.ui.dialogs.ScanningReceiptDialog
 import com.imanhaikal.memo.ui.dialogs.SetupDialog
+import com.imanhaikal.memo.ui.navigation.MemoNavHost
+import com.imanhaikal.memo.ui.navigation.Screen
+import com.imanhaikal.memo.ui.navigation.rememberMemoBackStack
+import com.imanhaikal.memo.ui.screens.BackupSummary
+import com.imanhaikal.memo.ui.screens.BudgetsScreen
+import com.imanhaikal.memo.ui.screens.CategoryCapsScreen
+import com.imanhaikal.memo.ui.screens.CycleHistoryScreen
 import com.imanhaikal.memo.ui.screens.DashboardScreen
+import com.imanhaikal.memo.ui.screens.RecurringScreen
+import com.imanhaikal.memo.ui.screens.SearchScreen
 import com.imanhaikal.memo.ui.screens.SettingsScreen
 import com.imanhaikal.memo.ui.theme.AppColors
+import com.imanhaikal.memo.utils.DateLabels
 import com.imanhaikal.memo.utils.ImageUtils
 import com.imanhaikal.memo.utils.LocalHapticsEnabled
 import com.imanhaikal.memo.utils.rememberStrongHaptics
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.ZoneId
 
 @Composable
 fun MemoApp(
-    viewModel: MainViewModel = viewModel(factory = MainViewModel.Factory)
+    viewModel: MainViewModel = viewModel(factory = MainViewModel.Factory),
+    /** Emits true when the widget or a launcher shortcut asked to add an expense. */
+    quickAddRequests: MutableStateFlow<Boolean> = remember { MutableStateFlow(false) }
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val scanState by viewModel.scanState.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val hapticsEnabled by viewModel.hapticsEnabled.collectAsStateWithLifecycle()
+    val cycleHistory by viewModel.cycleHistory.collectAsStateWithLifecycle()
+    val categoryCaps by viewModel.categoryCaps.collectAsStateWithLifecycle()
+    val recurringRules by viewModel.recurringRules.collectAsStateWithLifecycle()
+    val notificationSettings by viewModel.notificationSettings.collectAsStateWithLifecycle()
+    val searchCriteria by viewModel.searchCriteria.collectAsStateWithLifecycle()
+    val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
 
     // Wraps everything below, so every rememberStrongHaptics() in the tree — including
     // the one this function uses for Undo — sees the user's preference
     CompositionLocalProvider(LocalHapticsEnabled provides hapticsEnabled) {
     var showAddExpenseDialog by rememberSaveable { mutableStateOf(false) }
     var transactionToEditId by rememberSaveable { mutableStateOf<Int?>(null) }
-    var showSettings by rememberSaveable { mutableStateOf(false) }
+    var addAsIncome by rememberSaveable { mutableStateOf(false) }
     var showScanChooser by rememberSaveable { mutableStateOf(false) }
     // Uri kept as String so it survives process death while the camera app is open
     var cameraImageUriString by rememberSaveable { mutableStateOf<String?>(null) }
+    val backStack = rememberMemoBackStack()
     val transactionToEdit = remember(transactionToEditId, state.transactions) {
         state.transactions.firstOrNull { it.id == transactionToEditId }
     }
 
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val quickAdd by quickAddRequests.collectAsStateWithLifecycle()
+
+    // Opening from the widget lands straight in the add dialog, but only once the user
+    // actually has a budget — otherwise setup is the thing that needs answering first.
+    LaunchedEffect(quickAdd, state.isSetup) {
+        if (quickAdd && state.isSetup) {
+            transactionToEditId = null
+            addAsIncome = false
+            showAddExpenseDialog = true
+            quickAddRequests.value = false
+        }
+    }
     val scope = rememberCoroutineScope()
     val haptic = rememberStrongHaptics()
 
@@ -134,7 +157,6 @@ fun MemoApp(
         modifier = Modifier.fillMaxSize(),
         color = AppColors.Background
     ) {
-        // Main Scaffold
         Scaffold(
             snackbarHost = {
                 SnackbarHost(snackbarHostState) { data ->
@@ -148,8 +170,8 @@ fun MemoApp(
                 }
             },
             floatingActionButton = {
-                // Only show FABs if setup is complete and not in settings
-                if (state.isSetup && !showSettings) {
+                // Only show FABs if setup is complete and we're on the dashboard
+                if (state.isSetup && backStack.current == Screen.Dashboard) {
                     Column(
                         horizontalAlignment = Alignment.End,
                         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -164,6 +186,7 @@ fun MemoApp(
                         }
                         MemoFab(onClick = {
                             transactionToEditId = null
+                            addAsIncome = false
                             showAddExpenseDialog = true
                         })
                     }
@@ -172,8 +195,9 @@ fun MemoApp(
             containerColor = AppColors.Background
         ) { innerPadding ->
             if (state.isLoading) {
-                // The splash covers the first load, but a reset or a slow cold read can
-                // land here later — show the shape of the dashboard, never a bare screen
+                // The splash covers the first load, but a reset, a slow cold read or the
+                // one-time DataStore-to-Room handoff can land here later — show the shape
+                // of the dashboard, never a bare screen
                 DashboardSkeleton(contentPadding = innerPadding)
             } else {
                 if (!state.isSetup) {
@@ -185,88 +209,18 @@ fun MemoApp(
                         onDismiss = { /* Not dismissible until setup */ }
                     )
                 } else {
-                    // Track the system back gesture so Settings follows the finger and
-                    // can be abandoned mid-swipe, instead of snapping away on release
-                    val backProgress = remember { Animatable(0f) }
-                    PredictiveBackHandler(enabled = showSettings) { progress ->
-                        try {
-                            progress.collect { backProgress.snapTo(it.progress) }
-                            showSettings = false
-                            // Resolve alongside the outgoing slide rather than snapping
-                            backProgress.animateTo(0f, tween(SCREEN_NAV_MS))
-                        } catch (_: CancellationException) {
-                            // An abandoned gesture cancels this handler's own job, so the
-                            // settle has to run somewhere that outlives it — but still dies
-                            // with the screen. Suspending here would throw immediately and
-                            // strand Settings at its half-swiped scale and offset.
-                            scope.launch {
-                                backProgress.animateTo(
-                                    targetValue = 0f,
-                                    animationSpec = spring(
-                                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                                        stiffness = Spring.StiffnessMedium
-                                    )
-                                )
-                            }
-                        }
-                    }
-
-                    // Shared-axis-X style transition between Dashboard and Settings
-                    AnimatedContent(
-                        targetState = showSettings,
-                        transitionSpec = {
-                            val duration = SCREEN_NAV_MS
-                            val distance = 60
-                            if (targetState) {
-                                (slideInHorizontally(tween(duration, easing = FastOutSlowInEasing)) { distance } +
-                                    fadeIn(tween(duration))) togetherWith
-                                    (slideOutHorizontally(tween(duration, easing = FastOutSlowInEasing)) { -distance } +
-                                        fadeOut(tween(duration)))
-                            } else {
-                                (slideInHorizontally(tween(duration, easing = FastOutSlowInEasing)) { -distance } +
-                                    fadeIn(tween(duration))) togetherWith
-                                    (slideOutHorizontally(tween(duration, easing = FastOutSlowInEasing)) { distance } +
-                                        fadeOut(tween(duration)))
-                            }
-                        },
-                        label = "screenNav"
-                    ) { inSettings ->
-                        if (inSettings) {
-                            SettingsScreen(
+                    MemoNavHost(backStack = backStack) { screen, screenModifier ->
+                        when (screen) {
+                            Screen.Dashboard -> DashboardScreen(
                                 state = state,
-                                themeMode = themeMode,
-                                onThemeModeChange = viewModel::setThemeMode,
-                                hapticsEnabled = hapticsEnabled,
-                                onHapticsEnabledChange = viewModel::setHapticsEnabled,
-                                scanAvailable = viewModel.isScanAvailable,
-                                onBack = { showSettings = false },
-                                onSave = { amount, days, currency ->
-                                    viewModel.updateBudget(amount, days, currency)
-                                },
-                                onReset = {
-                                    viewModel.resetBudget()
-                                    showSettings = false
-                                },
-                                onMessage = showMessage,
-                                contentPadding = innerPadding,
-                                modifier = Modifier.graphicsLayer {
-                                    // Shrink toward the trailing edge as the gesture
-                                    // progresses, the way the platform moves a screen
-                                    // that is about to be popped
-                                    val p = backProgress.value
-                                    val s = 1f - BACK_SCALE_TRAVEL * p
-                                    scaleX = s
-                                    scaleY = s
-                                    translationX = size.width * BACK_SLIDE_FRACTION * p
-                                    alpha = 1f - 0.25f * p
-                                }
-                            )
-                        } else {
-                            DashboardScreen(
-                                state = state,
-                                onOpenSettings = { showSettings = true },
+                                onOpenSettings = { backStack.push(Screen.Settings) },
+                                onOpenBudgets = { backStack.push(Screen.Budgets) },
+                                onOpenHistory = { backStack.push(Screen.CycleHistory) },
+                                onOpenCategoryCaps = { backStack.push(Screen.CategoryCaps) },
+                                onOpenSearch = { backStack.push(Screen.Search) },
                                 onAddExpense = {
                                     transactionToEditId = null
+                                    addAsIncome = false
                                     showAddExpenseDialog = true
                                 },
                                 onEditTransaction = { transaction ->
@@ -274,7 +228,117 @@ fun MemoApp(
                                     showAddExpenseDialog = true
                                 },
                                 onDeleteTransaction = deleteWithUndo,
-                                contentPadding = innerPadding
+                                contentPadding = innerPadding,
+                                modifier = screenModifier
+                            )
+
+                            Screen.Settings -> SettingsScreen(
+                                state = state,
+                                themeMode = themeMode,
+                                onThemeModeChange = viewModel::setThemeMode,
+                                hapticsEnabled = hapticsEnabled,
+                                onHapticsEnabledChange = viewModel::setHapticsEnabled,
+                                scanAvailable = viewModel.isScanAvailable,
+                                onBack = { backStack.pop() },
+                                onOpenBudgets = { backStack.push(Screen.Budgets) },
+                                onOpenHistory = { backStack.push(Screen.CycleHistory) },
+                                onOpenCategoryCaps = { backStack.push(Screen.CategoryCaps) },
+                                onOpenRecurring = { backStack.push(Screen.Recurring) },
+                                notificationSettings = notificationSettings,
+                                onNotificationSettingsChange = viewModel::updateNotificationSettings,
+                                onSave = { amount, days, currency ->
+                                    viewModel.updateBudget(amount, days, currency)
+                                },
+                                onClearData = { viewModel.clearActiveBudgetData() },
+                                onBuildBackup = { viewModel.buildBackupJson() },
+                                onImportBackup = { contents, replace, onFinished ->
+                                    viewModel.importBackup(
+                                        contents = contents,
+                                        mode = if (replace) ImportMode.REPLACE else ImportMode.MERGE,
+                                        onFinished = onFinished
+                                    )
+                                },
+                                onPreviewBackup = { contents ->
+                                    viewModel.previewBackup(contents)?.let { backup ->
+                                        BackupSummary(
+                                            budgets = backup.budgets.size,
+                                            transactions = backup.transactions.size,
+                                            exportedOn = DateLabels.relativeDayLabel(
+                                                Instant.ofEpochMilli(backup.exportedAtMillis)
+                                                    .atZone(ZoneId.systemDefault())
+                                                    .toLocalDate()
+                                            )
+                                        )
+                                    }
+                                },
+                                onReset = {
+                                    viewModel.resetBudget()
+                                    backStack.popToRoot()
+                                },
+                                onMessage = showMessage,
+                                contentPadding = innerPadding,
+                                modifier = screenModifier
+                            )
+
+                            Screen.Budgets -> BudgetsScreen(
+                                budgets = state.allBudgets,
+                                activeBudgetId = state.budgetId,
+                                onSelect = viewModel::selectBudget,
+                                onCreate = { name, amount, days, currency ->
+                                    viewModel.createBudget(name, amount, days, currency)
+                                },
+                                onRename = viewModel::renameBudget,
+                                onArchive = viewModel::setBudgetArchived,
+                                onDelete = viewModel::deleteBudget,
+                                onBack = { backStack.pop() },
+                                contentPadding = innerPadding,
+                                modifier = screenModifier
+                            )
+
+                            Screen.CycleHistory -> CycleHistoryScreen(
+                                cycles = cycleHistory,
+                                currencyCode = state.currencyCode,
+                                onBack = { backStack.pop() },
+                                contentPadding = innerPadding,
+                                modifier = screenModifier
+                            )
+
+                            Screen.Recurring -> RecurringScreen(
+                                rules = recurringRules,
+                                currencyCode = state.currencyCode,
+                                onSave = viewModel::saveRecurringRule,
+                                onSetPaused = viewModel::setRecurringPaused,
+                                onDelete = viewModel::deleteRecurringRule,
+                                onBack = { backStack.pop() },
+                                contentPadding = innerPadding,
+                                modifier = screenModifier
+                            )
+
+                            Screen.Search -> SearchScreen(
+                                criteria = searchCriteria,
+                                results = searchResults,
+                                currencyCode = state.currencyCode,
+                                onCriteriaChange = viewModel::updateSearch,
+                                onEditTransaction = { transaction ->
+                                    transactionToEditId = transaction.id
+                                    showAddExpenseDialog = true
+                                },
+                                onDeleteTransaction = deleteWithUndo,
+                                onBack = {
+                                    viewModel.clearSearch()
+                                    backStack.pop()
+                                },
+                                contentPadding = innerPadding,
+                                modifier = screenModifier
+                            )
+
+                            Screen.CategoryCaps -> CategoryCapsScreen(
+                                caps = categoryCaps,
+                                currencyCode = state.currencyCode,
+                                onCapChanged = viewModel::setCategoryCap,
+                                onBack = { backStack.pop() },
+                                contentPadding = innerPadding,
+                                modifier = screenModifier
                             )
                         }
                     }
@@ -283,20 +347,34 @@ fun MemoApp(
                 if (showAddExpenseDialog) {
                     AddExpenseDialog(
                         transaction = transactionToEdit,
-                        onConfirm = { amount, note, dateMillis, hasTime, category, description ->
+                        initialType = if (addAsIncome) {
+                            TransactionType.INCOME
+                        } else {
+                            TransactionType.EXPENSE
+                        },
+                        onConfirm = { draft ->
                             if (transactionToEdit != null) {
                                 viewModel.updateTransaction(
                                     transactionToEdit.copy(
-                                        amount = amount,
-                                        note = note,
-                                        date = dateMillis ?: transactionToEdit.date,
-                                        category = category,
-                                        description = description,
-                                        hasTime = hasTime
+                                        amount = draft.amountCents,
+                                        note = draft.note,
+                                        date = draft.dateMillis ?: transactionToEdit.date,
+                                        category = draft.category,
+                                        description = draft.description,
+                                        hasTime = draft.hasTime,
+                                        type = draft.type
                                     )
                                 )
                             } else {
-                                viewModel.addTransaction(amount, note, dateMillis, category, description, hasTime)
+                                viewModel.addTransaction(
+                                    amountCents = draft.amountCents,
+                                    note = draft.note,
+                                    dateMillis = draft.dateMillis,
+                                    category = draft.category,
+                                    description = draft.description,
+                                    hasTime = draft.hasTime,
+                                    type = draft.type
+                                )
                             }
                             showAddExpenseDialog = false
                             transactionToEditId = null
@@ -351,8 +429,16 @@ fun MemoApp(
                         initialDateHasTime = scan.dateHasTime,
                         // A stray outside tap must not throw away the scanned receipt
                         dismissOnClickOutside = false,
-                        onConfirm = { amount, note, dateMillis, hasTime, category, description ->
-                            viewModel.addTransaction(amount, note, dateMillis, category, description, hasTime)
+                        onConfirm = { draft ->
+                            viewModel.addTransaction(
+                                amountCents = draft.amountCents,
+                                note = draft.note,
+                                dateMillis = draft.dateMillis,
+                                category = draft.category,
+                                description = draft.description,
+                                hasTime = draft.hasTime,
+                                type = draft.type
+                            )
                             viewModel.clearScanState()
                         },
                         onDismiss = { viewModel.clearScanState() }
@@ -366,6 +452,7 @@ fun MemoApp(
                         onManual = {
                             viewModel.clearScanState()
                             transactionToEditId = null
+                            addAsIncome = false
                             showAddExpenseDialog = true
                         },
                         onDismiss = { viewModel.clearScanState() }
@@ -377,11 +464,3 @@ fun MemoApp(
     }
     }
 }
-
-private const val SCREEN_NAV_MS = 300
-
-/** How far the outgoing screen shrinks at full back-gesture progress. */
-private const val BACK_SCALE_TRAVEL = 0.12f
-
-/** How far it drifts toward the trailing edge, as a fraction of screen width. */
-private const val BACK_SLIDE_FRACTION = 0.08f

@@ -10,6 +10,7 @@ import com.imanhaikal.memo.data.receipt.GeminiReceiptScanner
 import com.imanhaikal.memo.data.receipt.GeminiReceiptService
 import com.imanhaikal.memo.data.receipt.ScanOutcome
 import java.io.File
+import java.time.Clock
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -41,7 +42,10 @@ class ReceiptScanE2eTest {
 
         val scanner = GeminiReceiptScanner(
             contentResolver = context.contentResolver,
-            service = GeminiReceiptService(apiKey = BuildConfig.GEMINI_API_KEY)
+            service = GeminiReceiptService(
+                apiKey = BuildConfig.GEMINI_API_KEY,
+                clock = Clock.systemDefaultZone()
+            )
         )
 
         val outcome = runBlocking { scanner.scan(uri) }

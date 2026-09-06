@@ -60,7 +60,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import android.Manifest
+import android.os.Build
+import com.imanhaikal.memo.data.NotificationSettings
 import com.imanhaikal.memo.data.ThemeMode
+import com.imanhaikal.memo.notifications.MemoNotifications
 import com.imanhaikal.memo.ui.BudgetUiState
 import com.imanhaikal.memo.ui.components.MemoIconButton
 import com.imanhaikal.memo.ui.components.MemoInput
@@ -86,6 +90,16 @@ fun SettingsScreen(
     onHapticsEnabledChange: (Boolean) -> Unit,
     scanAvailable: Boolean,
     onBack: () -> Unit,
+    onOpenBudgets: () -> Unit,
+    onOpenHistory: () -> Unit,
+    onOpenCategoryCaps: () -> Unit,
+    onOpenRecurring: () -> Unit,
+    notificationSettings: NotificationSettings,
+    onNotificationSettingsChange: (NotificationSettings) -> Unit,
+    onClearData: () -> Unit,
+    onBuildBackup: suspend () -> String,
+    onImportBackup: (contents: String, replace: Boolean, onFinished: (String) -> Unit) -> Unit,
+    onPreviewBackup: (String) -> BackupSummary?,
     onSave: (Long, Int, String) -> Unit,
     onReset: () -> Unit,
     onMessage: (String) -> Unit,
@@ -101,6 +115,7 @@ fun SettingsScreen(
     var selectedCurrency by rememberSaveable(state.currencyCode) { mutableStateOf(state.currencyCode) }
     var showCurrencyDropdown by rememberSaveable { mutableStateOf(false) }
     var showResetDialog by rememberSaveable { mutableStateOf(false) }
+    var showClearDialog by rememberSaveable { mutableStateOf(false) }
     var showCurrencyChangeDialog by rememberSaveable { mutableStateOf(false) }
     val haptic = rememberStrongHaptics()
     val context = LocalContext.current
@@ -113,12 +128,17 @@ fun SettingsScreen(
         if (uri != null) {
             val transactions = state.transactions
             val currencyCode = state.currencyCode
+            val budgetName = state.budgetName
             scope.launch {
                 val written = withContext(Dispatchers.IO) {
                     runCatching {
                         context.contentResolver.openOutputStream(uri)?.use { stream ->
                             stream.write(
-                                CsvExporter.buildCsv(transactions, currencyCode).toByteArray()
+                                CsvExporter.buildCsv(
+                                    transactions = transactions,
+                                    currencyCode = currencyCode,
+                                    budgetName = budgetName
+                                ).toByteArray()
                             )
                         } != null
                     }.getOrDefault(false)
@@ -126,6 +146,56 @@ fun SettingsScreen(
                 onMessage(
                     if (written) "Exported ${transactions.size} expenses" else "Export failed"
                 )
+            }
+        }
+    }
+
+    // Full-fidelity JSON backup: everything CSV can't carry (budgets, cycles, caps,
+    // recurring rules) so a reinstall can actually be undone.
+    var pendingImport by remember { mutableStateOf<PendingImport?>(null) }
+
+    val backupExportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val written = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val payload = onBuildBackup()
+                        context.contentResolver.openOutputStream(uri)?.use { stream ->
+                            stream.write(payload.toByteArray())
+                        } != null
+                    }.getOrDefault(false)
+                }
+                onMessage(if (written) "Backup saved" else "Backup failed")
+            }
+        }
+    }
+
+    val backupImportLauncher = rememberLauncherForActivityResult(
+        // Some file pickers hand JSON back as octet-stream, so accept the wider types
+        // rather than leaving the user's own backup greyed out.
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val contents = withContext(Dispatchers.IO) {
+                    runCatching {
+                        context.contentResolver.openInputStream(uri)?.use { stream ->
+                            stream.readBytes().decodeToString()
+                        }
+                    }.getOrNull()
+                }
+                if (contents == null) {
+                    onMessage("Couldn't read that file")
+                } else {
+                    val summary = onPreviewBackup(contents)
+                    if (summary == null) {
+                        onMessage("That file isn't a Memo backup")
+                    } else {
+                        pendingImport = PendingImport(contents, summary)
+                    }
+                }
             }
         }
     }
@@ -416,12 +486,127 @@ fun SettingsScreen(
                 .background(AppColors.Border)
         )
 
+        // Manage Section
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                text = "Manage",
+                style = MaterialTheme.typography.titleMedium,
+                color = AppColors.TextSecondary
+            )
+
+            SettingsNavRow(
+                title = "Budgets",
+                subtitle = if (state.allBudgets.size > 1) {
+                    "${state.allBudgets.size} budgets · ${state.budgetName} active"
+                } else {
+                    "Add a second budget, e.g. Travel"
+                },
+                onClick = onOpenBudgets
+            )
+            SettingsNavRow(
+                title = "Category limits",
+                subtitle = "Cap what you spend per category",
+                onClick = onOpenCategoryCaps
+            )
+            SettingsNavRow(
+                title = "Recurring",
+                subtitle = "Rent, subscriptions and anything else that repeats",
+                onClick = onOpenRecurring
+            )
+            SettingsNavRow(
+                title = "Cycle history",
+                subtitle = "Review finished cycles",
+                onClick = onOpenHistory
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(AppColors.Border)
+        )
+
+        // Notifications Section
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                text = "Notifications",
+                style = MaterialTheme.typography.titleMedium,
+                color = AppColors.TextSecondary
+            )
+
+            // The runtime permission is requested when the first toggle goes on, not at
+            // launch: asking cold, before the user has any reason to say yes, converts
+            // badly and there is no second chance once it's denied twice.
+            val requestPermission = rememberNotificationPermissionRequest { granted ->
+                if (!granted) {
+                    onMessage("Notifications are off for Memo in Android settings")
+                }
+            }
+
+            val applySetting: (NotificationSettings) -> Unit = { updated ->
+                haptic.tick()
+                if (updated.anyEnabled && !notificationSettings.anyEnabled) requestPermission()
+                onNotificationSettingsChange(updated)
+            }
+
+            NotificationToggle(
+                title = "Daily limit",
+                subtitle = "A morning note of what you can spend",
+                checked = notificationSettings.dailyReminder,
+                onCheckedChange = { applySetting(notificationSettings.copy(dailyReminder = it)) }
+            )
+            NotificationToggle(
+                title = "Over limit",
+                subtitle = "When an expense takes you past today's allowance",
+                checked = notificationSettings.overLimit,
+                onCheckedChange = { applySetting(notificationSettings.copy(overLimit = it)) }
+            )
+            NotificationToggle(
+                title = "Cycle summary",
+                subtitle = "How a finished cycle went",
+                checked = notificationSettings.cycleEnd,
+                onCheckedChange = { applySetting(notificationSettings.copy(cycleEnd = it)) }
+            )
+            NotificationToggle(
+                title = "Recurring added",
+                subtitle = "When a scheduled expense is recorded for you",
+                checked = notificationSettings.recurringPosted,
+                onCheckedChange = { applySetting(notificationSettings.copy(recurringPosted = it)) }
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(AppColors.Border)
+        )
+
         // Data Section
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(
                 text = "Data",
                 style = MaterialTheme.typography.titleMedium,
                 color = AppColors.TextSecondary
+            )
+
+            DataButton(
+                label = "Back up everything (JSON)",
+                onClick = {
+                    haptic.tick()
+                    backupExportLauncher.launch("memo-backup-${LocalDate.now()}.json")
+                }
+            )
+
+            DataButton(
+                label = "Restore from a backup",
+                onClick = {
+                    haptic.tick()
+                    backupImportLauncher.launch(
+                        arrayOf("application/json", "application/octet-stream", "text/plain")
+                    )
+                }
             )
 
             val exportInteraction = remember { MutableInteractionSource() }
@@ -481,32 +666,23 @@ fun SettingsScreen(
                 ),
             )
 
-            val resetInteraction = remember { MutableInteractionSource() }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .springPress(resetInteraction, pressedScale = PressScale.Surface)
-                    // Clip before clickable so the ripple honors the rounded shape
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(AppColors.RedSubtle)
-                    .clickable(
-                        interactionSource = resetInteraction,
-                        indication = LocalIndication.current
-                    ) {
-                        haptic.tick()
-                        showResetDialog = true
-                    }
-                    .padding(16.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Reset All Data",
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        color = AppColors.Red,
-                        fontWeight = FontWeight.Bold
-                    )
-                )
-            }
+            // Two separate outs: keep the budget but wipe its history, or remove the
+            // budget entirely. Previously the only option deleted every row in the
+            // database, including budgets the user wasn't even looking at.
+            DangerAction(
+                label = "Clear this budget's expenses",
+                onClick = {
+                    haptic.tick()
+                    showClearDialog = true
+                }
+            )
+            DangerAction(
+                label = "Delete this budget",
+                onClick = {
+                    haptic.tick()
+                    showResetDialog = true
+                }
+            )
         }
     }
 
@@ -546,8 +722,14 @@ fun SettingsScreen(
     if (showResetDialog) {
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
-            title = { Text(text = "Reset All Data") },
-            text = { Text(text = "Are you sure? This will delete all transactions and reset your budget settings. This action cannot be undone.") },
+            title = { Text(text = "Delete \"${state.budgetName}\"?") },
+            text = {
+                Text(
+                    text = "This deletes the budget, every expense recorded against it, " +
+                        "and its cycle history. Other budgets are left alone. " +
+                        "This can't be undone."
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -556,7 +738,7 @@ fun SettingsScreen(
                         showResetDialog = false
                     }
                 ) {
-                    Text("Reset", color = AppColors.Red)
+                    Text("Delete", color = AppColors.Red)
                 }
             },
             dismissButton = {
@@ -567,6 +749,287 @@ fun SettingsScreen(
             containerColor = AppColors.Surface,
             titleContentColor = AppColors.TextPrimary,
             textContentColor = AppColors.TextSecondary
+        )
+    }
+
+    pendingImport?.let { pending ->
+        ImportBackupDialog(
+            summary = pending.summary,
+            onMerge = {
+                onImportBackup(pending.contents, false, onMessage)
+                pendingImport = null
+            },
+            onReplace = {
+                onImportBackup(pending.contents, true, onMessage)
+                pendingImport = null
+                onBack()
+            },
+            onDismiss = { pendingImport = null }
+        )
+    }
+
+    if (showClearDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearDialog = false },
+            title = { Text(text = "Clear expenses?") },
+            text = {
+                Text(
+                    text = "This deletes every expense and the cycle history for " +
+                        "\"${state.budgetName}\", but keeps the budget itself and its " +
+                        "settings. This can't be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        haptic.error()
+                        onClearData()
+                        showClearDialog = false
+                    }
+                ) {
+                    Text("Clear", color = AppColors.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDialog = false }) {
+                    Text("Cancel", color = AppColors.TextPrimary)
+                }
+            },
+            containerColor = AppColors.Surface,
+            titleContentColor = AppColors.TextPrimary,
+            textContentColor = AppColors.TextSecondary
+        )
+    }
+}
+
+/**
+ * What an import will do, shown before anything is written. Replace is destructive, so it
+ * gets the same red treatment as the Danger Zone rather than a bare "OK".
+ */
+@Composable
+private fun ImportBackupDialog(
+    summary: BackupSummary,
+    onMerge: () -> Unit,
+    onReplace: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val haptic = rememberStrongHaptics()
+    var confirmingReplace by rememberSaveable { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = if (confirmingReplace) "Replace everything?" else "Restore backup") },
+        text = {
+            Text(
+                text = if (confirmingReplace) {
+                    "This deletes everything currently in Memo and replaces it with the " +
+                        "backup. This can't be undone."
+                } else {
+                    buildString {
+                        append("This backup holds ${summary.transactions} expenses")
+                        if (summary.budgets > 0) append(" across ${summary.budgets} budgets")
+                        summary.exportedOn?.let { append(", saved $it") }
+                        append(".\n\n")
+                        append("Add merges it in, skipping anything you already have. ")
+                        append("Replace wipes Memo first.")
+                    }
+                }
+            )
+        },
+        confirmButton = {
+            if (confirmingReplace) {
+                TextButton(
+                    onClick = {
+                        haptic.error()
+                        onReplace()
+                    }
+                ) {
+                    Text("Replace", color = AppColors.Red)
+                }
+            } else {
+                TextButton(
+                    onClick = {
+                        haptic.success()
+                        onMerge()
+                    }
+                ) {
+                    Text("Add", color = AppColors.TextPrimary)
+                }
+            }
+        },
+        dismissButton = {
+            if (confirmingReplace) {
+                TextButton(onClick = { confirmingReplace = false }) {
+                    Text("Back", color = AppColors.TextPrimary)
+                }
+            } else {
+                Row {
+                    TextButton(onClick = { confirmingReplace = true }) {
+                        Text("Replace", color = AppColors.Red)
+                    }
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel", color = AppColors.TextSecondary)
+                    }
+                }
+            }
+        },
+        containerColor = AppColors.Surface,
+        titleContentColor = AppColors.TextPrimary,
+        textContentColor = AppColors.TextSecondary
+    )
+}
+
+/**
+ * Asks for POST_NOTIFICATIONS when needed.
+ *
+ * Below API 33 the permission does not exist and the callback reports granted straight
+ * away, so callers never need a version check of their own.
+ */
+@Composable
+private fun rememberNotificationPermissionRequest(
+    onResult: (Boolean) -> Unit
+): () -> Unit {
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> onResult(granted) }
+
+    return {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            MemoNotifications.hasPermission(context)
+        ) {
+            onResult(true)
+        } else {
+            launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+}
+
+@Composable
+private fun NotificationToggle(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = AppColors.TextPrimary
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = AppColors.TextTertiary
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = AppColors.OnYellow,
+                checkedTrackColor = AppColors.Yellow,
+                uncheckedThumbColor = AppColors.TextTertiary,
+                uncheckedTrackColor = AppColors.Field
+            )
+        )
+    }
+}
+
+/** Full-width outlined action in the Data section. */
+@Composable
+private fun DataButton(label: String, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    OutlinedButton(
+        onClick = onClick,
+        interactionSource = interaction,
+        modifier = Modifier
+            .springPress(interaction)
+            .fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = AppColors.TextPrimary),
+        border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Border)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(vertical = 4.dp)
+        )
+    }
+}
+
+/** A tappable row that opens another screen. */
+@Composable
+private fun SettingsNavRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    val interaction = remember { MutableInteractionSource() }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .springPress(interaction, pressedScale = PressScale.Surface)
+            .clip(RoundedCornerShape(12.dp))
+            .background(AppColors.Field)
+            .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick)
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = AppColors.TextPrimary
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = AppColors.TextTertiary
+            )
+        }
+        Text(
+            text = "›",
+            style = MaterialTheme.typography.titleMedium,
+            color = AppColors.TextSecondary
+        )
+    }
+}
+
+/** A destructive, full-width action in the Danger Zone. */
+@Composable
+private fun DangerAction(
+    label: String,
+    onClick: () -> Unit
+) {
+    val interaction = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .springPress(interaction, pressedScale = PressScale.Surface)
+            // Clip before clickable so the ripple honors the rounded shape
+            .clip(RoundedCornerShape(12.dp))
+            .background(AppColors.RedSubtle)
+            .clickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                onClick = onClick
+            )
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge.copy(
+                color = AppColors.Red,
+                fontWeight = FontWeight.Bold
+            )
         )
     }
 }

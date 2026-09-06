@@ -1,8 +1,11 @@
 package com.imanhaikal.memo.data.receipt
 
 import android.util.Log
+import com.imanhaikal.memo.BuildConfig
 import com.imanhaikal.memo.data.Category
+import com.imanhaikal.memo.data.Transaction
 import java.io.IOException
+import java.time.Clock
 import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 import kotlinx.serialization.encodeToString
@@ -19,6 +22,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 class GeminiReceiptService(
     private val apiKey: String,
+    private val clock: Clock,
     private val baseUrl: String = DEFAULT_URL,
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -48,7 +52,7 @@ class GeminiReceiptService(
         val body = try {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    Log.w(TAG, "API error ${response.code}: ${response.body?.string()?.take(500)}")
+                    warn("API error ${response.code}") { response.body?.string()?.take(500) }
                     return ScanOutcome.Failure(ScanFailureReason.API_ERROR)
                 }
                 response.body?.string()
@@ -59,41 +63,54 @@ class GeminiReceiptService(
         } ?: return ScanOutcome.Failure(ScanFailureReason.PARSE)
 
         val payload = ReceiptResponseParser.extractPayloadText(body, json)
-            ?.let(ReceiptResponseParser::stripMarkdownFences)
+            ?.let(ReceiptResponseParser::extractJsonObject)
         if (payload == null) {
-            Log.w(TAG, "No text payload in response: ${body.take(500)}")
+            warn("No text payload in response") { body.take(500) }
             return ScanOutcome.Failure(ScanFailureReason.PARSE)
         }
         val extraction = ReceiptResponseParser.parseExtraction(payload, json)
         if (extraction == null) {
-            Log.w(TAG, "Unparseable extraction payload: ${payload.take(500)}")
+            warn("Unparseable extraction payload") { payload.take(500) }
             return ScanOutcome.Failure(ScanFailureReason.PARSE)
         }
         val amountCents = ReceiptResponseParser.totalToCents(extraction.total)
         if (amountCents == null) {
-            Log.w(TAG, "Unreadable total '${extraction.total}' (note='${extraction.note}')")
+            warn("Unreadable total") { "'${extraction.total}' (note='${extraction.note}')" }
             return ScanOutcome.Failure(ScanFailureReason.UNREADABLE)
         }
 
-        val moment = ReceiptResponseParser.parseReceiptDatetime(extraction.datetime)
+        val moment = ReceiptResponseParser.parseReceiptDatetime(
+            raw = extraction.datetime,
+            zone = clock.zone,
+            nowMillis = clock.millis()
+        )
         if (moment == null && extraction.datetime.isNotBlank()) {
-            Log.w(TAG, "Discarded receipt datetime '${extraction.datetime}'")
+            warn("Discarded receipt datetime") { "'${extraction.datetime}'" }
         }
         return ScanOutcome.Success(
             amountCents = amountCents,
-            note = extraction.note.trim().take(60),
+            note = extraction.note.trim().take(Transaction.NOTE_MAX_CHARS),
             category = Category.fromId(extraction.category.trim().lowercase()),
-            description = extraction.description.trim().take(300),
+            description = extraction.description.trim().take(Transaction.DESCRIPTION_MAX_CHARS),
             dateMillis = moment?.millis,
             dateHasTime = moment?.hasTime ?: true
         )
+    }
+
+    /**
+     * Logs [safe] always, appending [detail] only in debug builds: the detail carries
+     * receipt contents (merchant name, line items, raw API payloads), and logcat is
+     * readable by bug-report capture and privileged tooling.
+     */
+    private fun warn(safe: String, detail: () -> String?) {
+        if (BuildConfig.DEBUG) Log.w(TAG, "$safe: ${detail()}") else Log.w(TAG, safe)
     }
 
     private fun buildRequest(jpegBase64: String) = GeminiRequest(
         contents = listOf(
             GeminiContent(
                 parts = listOf(
-                    GeminiPart(text = buildPrompt(LocalDate.now())),
+                    GeminiPart(text = buildPrompt(LocalDate.now(clock))),
                     GeminiPart(inlineData = GeminiInlineData(mimeType = "image/jpeg", data = jpegBase64))
                 )
             )
@@ -116,7 +133,6 @@ class GeminiReceiptService(
               no currency symbol, no thousands separators (e.g. "12.50", "1234.00").
             - note: a short label for this expense, preferably the merchant/store name
               (e.g. "Tesco", "Nasi Kandar Pelita"). Max 30 characters.
-            - confidence: 0 to 1.
             - category: the best-fitting expense category based on the merchant and items,
               one of: food, transport, shopping, bills, entertainment, health, other.
               Use "other" only when nothing else fits; omit the field if you cannot tell.
@@ -131,7 +147,7 @@ class GeminiReceiptService(
               on or before today. Empty if no date is printed or it is unreadable.
             Receipts are usually in Malaysian Ringgit (RM / MYR) but may be in other
             currencies; always return only the numeric amount.
-            If the image is not a readable receipt, return total "0", note "" and confidence 0.
+            If the image is not a readable receipt, return total "0" and note "".
         """.trimIndent()
 
         private val RESPONSE_SCHEMA = buildJsonObject {
@@ -144,10 +160,6 @@ class GeminiReceiptService(
                 putJsonObject("note") {
                     put("type", "STRING")
                     put("description", "Merchant name or short expense description, max 30 chars. Empty if unreadable.")
-                }
-                putJsonObject("confidence") {
-                    put("type", "NUMBER")
-                    put("description", "Extraction confidence from 0 to 1.")
                 }
                 putJsonObject("category") {
                     put("type", "STRING")

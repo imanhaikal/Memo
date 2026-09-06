@@ -1,46 +1,41 @@
 package com.imanhaikal.memo.ui
 
-import com.imanhaikal.memo.data.BudgetConfig
-import com.imanhaikal.memo.data.BudgetPreferences
-import com.imanhaikal.memo.data.TransactionDao
-import com.imanhaikal.memo.data.receipt.FakeReceiptScanner
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
+import com.imanhaikal.memo.data.Transaction
+import com.imanhaikal.memo.testing.MemoTestHarness
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Test
 import java.time.Clock
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModelSettingsTest {
 
-    private lateinit var viewModel: MainViewModel
-    private lateinit var transactionDao: TransactionDao
-    private lateinit var budgetPreferences: BudgetPreferences
     private val testDispatcher = StandardTestDispatcher()
+    private val zoneId: ZoneId = ZoneId.systemDefault()
+    private val now: Instant = Instant.parse("2024-01-15T12:00:00Z")
+    private val clock: Clock = Clock.fixed(now, zoneId)
+    private val today: LocalDate = now.atZone(zoneId).toLocalDate()
 
-    // Mock data flows
-    private val transactionsFlow = MutableStateFlow(emptyList<com.imanhaikal.memo.data.Transaction>())
-    private val configFlow = MutableStateFlow(BudgetConfig(0L, 0L, 30, "USD"))
+    private lateinit var harness: MemoTestHarness
+    private lateinit var viewModel: MainViewModel
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        transactionDao = mockk(relaxed = true) // Relaxed to allow calls without specific stubbing
-        budgetPreferences = mockk(relaxed = true)
-
-        every { transactionDao.getAllTransactions() } returns transactionsFlow
-        every { budgetPreferences.budgetConfig } returns configFlow
-
-        viewModel = MainViewModel(transactionDao, budgetPreferences, Clock.systemDefaultZone(), FakeReceiptScanner(), defaultDispatcher = testDispatcher)
+        harness = MemoTestHarness(clock, today)
+        viewModel = harness.viewModel(testDispatcher)
     }
 
     @After
@@ -49,45 +44,99 @@ class MainViewModelSettingsTest {
     }
 
     @Test
-    fun `updateBudget updates budget and days`() = runTest {
-        // Arrange
-        val newBudget = 500_000L
-        val newDays = 15
+    fun `updateBudget changes the amount and cycle length of the active budget`() = runTest {
+        val seeded = harness.seedBudget(amountCents = 300_000L, totalDays = 30, startDate = today)
 
-        // Act
-        viewModel.updateBudget(newBudget, newDays, "USD")
+        viewModel.updateBudget(500_000L, 15, "USD")
         testDispatcher.scheduler.advanceUntilIdle()
 
-        // Assert
-        coVerify(exactly = 1) { 
-            budgetPreferences.updateBudgetConfig(newBudget, newDays, "USD") 
-        }
+        val updated = harness.budgetDao.getById(seeded.id)
+        assertNotNull(updated)
+        assertEquals(500_000L, updated!!.amountCents)
+        assertEquals(15, updated.totalDays)
+        assertEquals("USD", updated.currencyCode)
     }
 
     @Test
-    fun `updateBudget does NOT reset start date or clear transactions`() = runTest {
-        // Arrange
-        val newBudget = 500_000L
-        val newDays = 15
+    fun `updateBudget keeps the cycle start date and the existing transactions`() = runTest {
+        val seeded = harness.seedBudget(amountCents = 300_000L, totalDays = 30, startDate = today)
+        harness.transactionDao.insertTransaction(
+            Transaction(amount = 1_000L, note = "Coffee", date = now.toEpochMilli(), budgetId = seeded.id)
+        )
 
-        // Act
-        viewModel.updateBudget(newBudget, newDays, "USD")
+        viewModel.updateBudget(500_000L, 15, "USD")
         testDispatcher.scheduler.advanceUntilIdle()
 
-        // Assert
-        // Verify updateBudgetConfig IS called
-        coVerify(exactly = 1) { 
-            budgetPreferences.updateBudgetConfig(newBudget, newDays, "USD") 
-        }
+        val updated = harness.budgetDao.getById(seeded.id)!!
+        // Editing the budget must not silently restart the cycle underneath the user.
+        assertEquals(seeded.firstCycleStartDate, updated.firstCycleStartDate)
+        assertEquals(1, harness.transactionDao.rows.value.size)
+    }
 
-        // Verify saveBudgetSettings (which sets start date) is NOT called
-        coVerify(exactly = 0) {
-            budgetPreferences.saveBudgetSettings(any(), any(), any(), any())
-        }
+    @Test
+    fun `raising the budget takes effect on the current cycle straight away`() = runTest {
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+        harness.seedBudget(amountCents = 300_000L, totalDays = 30, startDate = today)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(10_000L, viewModel.uiState.value.dailyLimit)
 
-        // Verify deleteAllTransactions is NOT called
-        coVerify(exactly = 0) {
-            transactionDao.deleteAllTransactions()
-        }
+        // The Settings screen tells the user changes apply to the current cycle right
+        // away, so the open cycle has to pick up the new amount rather than waiting.
+        viewModel.updateBudget(600_000L, 30, "MYR")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(600_000L, viewModel.uiState.value.totalBudget)
+        assertEquals(20_000L, viewModel.uiState.value.dailyLimit)
+    }
+
+    @Test
+    fun `shortening the cycle length shortens the days remaining`() = runTest {
+        backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
+        harness.seedBudget(amountCents = 300_000L, totalDays = 30, startDate = today)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(30, viewModel.uiState.value.daysRemaining)
+
+        viewModel.updateBudget(300_000L, 15, "MYR")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(15, viewModel.uiState.value.daysRemaining)
+    }
+
+    @Test
+    fun `clearing a budget's data leaves other budgets untouched`() = runTest {
+        val first = harness.seedBudget(amountCents = 300_000L, startDate = today, name = "Monthly")
+        val second = harness.seedBudget(amountCents = 50_000L, startDate = today, name = "Travel")
+        harness.transactionDao.insertTransaction(
+            Transaction(amount = 1_000L, note = "Coffee", date = now.toEpochMilli(), budgetId = first.id)
+        )
+        harness.transactionDao.insertTransaction(
+            Transaction(amount = 2_000L, note = "Taxi", date = now.toEpochMilli(), budgetId = second.id)
+        )
+
+        // Travel is active, having been seeded last.
+        viewModel.clearActiveBudgetData()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val remaining = harness.transactionDao.rows.value
+        assertEquals(1, remaining.size)
+        assertEquals(first.id, remaining.single().budgetId)
+        // The budget itself survives; only its data was cleared.
+        assertNotNull(harness.budgetDao.getById(second.id))
+    }
+
+    @Test
+    fun `deleting a budget removes its transactions and falls back to another budget`() = runTest {
+        val first = harness.seedBudget(amountCents = 300_000L, startDate = today, name = "Monthly")
+        val second = harness.seedBudget(amountCents = 50_000L, startDate = today, name = "Travel")
+        harness.transactionDao.insertTransaction(
+            Transaction(amount = 2_000L, note = "Taxi", date = now.toEpochMilli(), budgetId = second.id)
+        )
+
+        viewModel.resetBudget()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(null, harness.budgetDao.getById(second.id))
+        assertEquals(emptyList<Transaction>(), harness.transactionDao.rows.value)
+        assertEquals(first.id, harness.activeBudgetStore.state.value)
     }
 }

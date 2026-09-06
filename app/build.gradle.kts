@@ -66,6 +66,10 @@ android {
     sourceSets {
         // Exported Room schemas, so MigrationTestHelper can load historical versions
         getByName("androidTest").assets.srcDir("$projectDir/schemas")
+        // In-memory fakes and the ViewModel harness, shared by JVM and instrumented
+        // tests so the DAO doubles don't have to be maintained in two places.
+        getByName("test").java.srcDir("src/sharedTest/java")
+        getByName("androidTest").java.srcDir("src/sharedTest/java")
     }
 }
 
@@ -102,6 +106,9 @@ dependencies {
 
     // Receipt scanning (Gemini REST + image handling)
     implementation(libs.okhttp)
+    implementation(libs.androidx.work.runtime)
+    implementation(libs.androidx.glance.appwidget)
+    implementation(libs.androidx.glance.material3)
     implementation(libs.androidx.exifinterface)
 
     testImplementation(libs.junit)
@@ -112,6 +119,7 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.room.testing)
+    androidTestImplementation(libs.androidx.work.testing)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
