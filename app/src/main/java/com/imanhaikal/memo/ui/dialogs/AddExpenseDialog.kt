@@ -87,9 +87,6 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
 
-/** Longest description we accept; past this the field stops growing and scrolls. */
-private const val DESCRIPTION_MAX_CHARS = 280
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AddExpenseDialog(
@@ -347,8 +344,10 @@ fun AddExpenseDialog(
 
                 MemoInput(
                     value = descriptionText,
+                    // Truncate rather than reject: a scan can prefill more than the cap,
+                    // and a reject-on-length guard would then block every edit, deletions included.
                     onValueChange = {
-                        if (it.length <= DESCRIPTION_MAX_CHARS) descriptionText = it
+                        descriptionText = it.take(Transaction.DESCRIPTION_MAX_CHARS)
                     },
                     label = "Description",
                     placeholder = "Add more details…",

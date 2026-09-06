@@ -35,4 +35,10 @@ data class Transaction(
     /** Signed contribution to spending: income gives money back to the pool. */
     val signedAmount: Long
         get() = if (type == TransactionType.INCOME) -amount else amount
+
+    companion object {
+        /** Hard caps on the free-text fields, shared by the scan pipeline and the expense dialog. */
+        const val NOTE_MAX_CHARS = 40
+        const val DESCRIPTION_MAX_CHARS = 280
+    }
 }

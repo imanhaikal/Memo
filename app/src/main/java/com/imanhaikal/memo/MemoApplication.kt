@@ -202,7 +202,7 @@ class DefaultAppContainer(private val context: Application) : AppContainer {
     override val receiptScanner: ReceiptScanner by lazy {
         GeminiReceiptScanner(
             contentResolver = context.contentResolver,
-            service = GeminiReceiptService(apiKey = BuildConfig.GEMINI_API_KEY)
+            service = GeminiReceiptService(apiKey = BuildConfig.GEMINI_API_KEY, clock = clock)
         )
     }
 }

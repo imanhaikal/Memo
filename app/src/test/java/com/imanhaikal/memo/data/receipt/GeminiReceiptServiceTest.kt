@@ -1,6 +1,7 @@
 package com.imanhaikal.memo.data.receipt
 
 import com.imanhaikal.memo.data.Category
+import com.imanhaikal.memo.data.Transaction
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
@@ -10,14 +11,23 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import java.time.LocalDateTime
+import java.time.Clock
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import java.time.ZonedDateTime
 
 class GeminiReceiptServiceTest {
 
     private lateinit var server: MockWebServer
     private lateinit var service: GeminiReceiptService
+
+    private val zone = ZoneId.of("Asia/Kuala_Lumpur")
+
+    // 2026-07-19 12:00 in Asia/Kuala_Lumpur. Fixed so prompt and datetime assertions
+    // can't drift across a midnight boundary mid-run.
+    private val now = ZonedDateTime.of(2026, 7, 19, 12, 0, 0, 0, zone)
+
+    private fun millisAt(year: Int, month: Int, day: Int, hour: Int, minute: Int): Long =
+        ZonedDateTime.of(year, month, day, hour, minute, 0, 0, zone).toInstant().toEpochMilli()
 
     @Before
     fun setup() {
@@ -25,6 +35,7 @@ class GeminiReceiptServiceTest {
         server.start()
         service = GeminiReceiptService(
             apiKey = "test-key",
+            clock = Clock.fixed(now.toInstant(), zone),
             baseUrl = server.url("/v1beta/models/gemini-flash-lite-latest:generateContent").toString()
         )
     }
@@ -69,19 +80,16 @@ class GeminiReceiptServiceTest {
         assertTrue(body.contains("\"data\":\"aW1hZ2U=\""))
         // The prompt must anchor the model to the current date so it doesn't
         // misresolve ambiguous or missing receipt years
-        assertTrue(body.contains("Today's date is ${java.time.LocalDate.now()}"))
+        assertTrue(body.contains("Today's date is 2026-07-19"))
     }
 
     @Test
     fun `response with details carries category, description and datetime`() {
-        val zone = ZoneId.systemDefault()
-        val receiptTime = LocalDateTime.now(zone).minusDays(1).withSecond(0).withNano(0)
-        val datetime = receiptTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
         server.enqueue(
             MockResponse().setBody(
                 successBody(
                     """{"total":"12.50","note":"Tesco","confidence":0.9,""" +
-                        """"category":"shopping","description":"Groceries and snacks","datetime":"$datetime"}"""
+                        """"category":"shopping","description":"Groceries and snacks","datetime":"2026-07-18 14:35"}"""
                 )
             )
         )
@@ -94,7 +102,7 @@ class GeminiReceiptServiceTest {
                 note = "Tesco",
                 category = Category.SHOPPING,
                 description = "Groceries and snacks",
-                dateMillis = receiptTime.atZone(zone).toInstant().toEpochMilli()
+                dateMillis = millisAt(2026, 7, 18, 14, 35)
             ),
             outcome
         )
@@ -106,20 +114,15 @@ class GeminiReceiptServiceTest {
 
     @Test
     fun `date-only receipt datetime carries hasTime false`() {
-        val zone = ZoneId.systemDefault()
-        val receiptDay = LocalDateTime.now(zone).minusDays(1).toLocalDate()
         server.enqueue(
             MockResponse().setBody(
-                successBody("""{"total":"5.00","note":"Kiosk","datetime":"$receiptDay"}""")
+                successBody("""{"total":"5.00","note":"Kiosk","datetime":"2026-07-18"}""")
             )
         )
 
         val outcome = service.extractReceipt("aW1hZ2U=") as ScanOutcome.Success
 
-        assertEquals(
-            receiptDay.atTime(12, 0).atZone(zone).toInstant().toEpochMilli(),
-            outcome.dateMillis
-        )
+        assertEquals(millisAt(2026, 7, 18, 12, 0), outcome.dateMillis)
         assertEquals(false, outcome.dateHasTime)
     }
 
@@ -150,6 +153,24 @@ class GeminiReceiptServiceTest {
     }
 
     @Test
+    fun `over-long note and description are truncated to the shared limits`() {
+        // A prefill longer than the dialog's own cap used to lock its edit field.
+        server.enqueue(
+            MockResponse().setBody(
+                successBody(
+                    """{"total":"5.00","note":"${"n".repeat(120)}",""" +
+                        """"description":"${"d".repeat(600)}"}"""
+                )
+            )
+        )
+
+        val outcome = service.extractReceipt("aW1hZ2U=") as ScanOutcome.Success
+
+        assertEquals(Transaction.NOTE_MAX_CHARS, outcome.note.length)
+        assertEquals(Transaction.DESCRIPTION_MAX_CHARS, outcome.description.length)
+    }
+
+    @Test
     fun `fenced json payload still succeeds`() {
         server.enqueue(
             MockResponse().setBody(successBody("```json\n{\"total\":\"7.00\",\"note\":\"KFC\"}\n```"))
@@ -176,6 +197,39 @@ class GeminiReceiptServiceTest {
 
         assertEquals(
             ScanOutcome.Failure(ScanFailureReason.API_ERROR),
+            service.extractReceipt("aW1hZ2U=")
+        )
+    }
+
+    @Test
+    fun `rate limit maps to api error`() {
+        server.enqueue(MockResponse().setResponseCode(429))
+
+        assertEquals(
+            ScanOutcome.Failure(ScanFailureReason.API_ERROR),
+            service.extractReceipt("aW1hZ2U=")
+        )
+    }
+
+    @Test
+    fun `safety-blocked candidate maps to parse error`() {
+        // A blocked response is a 200 with a candidate that carries no content.
+        server.enqueue(
+            MockResponse().setBody("""{"candidates": [{"finishReason": "SAFETY"}]}""")
+        )
+
+        assertEquals(
+            ScanOutcome.Failure(ScanFailureReason.PARSE),
+            service.extractReceipt("aW1hZ2U=")
+        )
+    }
+
+    @Test
+    fun `empty candidates maps to parse error`() {
+        server.enqueue(MockResponse().setBody("""{"candidates": []}"""))
+
+        assertEquals(
+            ScanOutcome.Failure(ScanFailureReason.PARSE),
             service.extractReceipt("aW1hZ2U=")
         )
     }

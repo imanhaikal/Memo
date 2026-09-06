@@ -51,23 +51,40 @@ class ReceiptResponseParserTest {
         assertNull(ReceiptResponseParser.extractPayloadText("not json at all", json))
     }
 
-    // --- stripMarkdownFences ---
+    // --- extractJsonObject ---
 
     @Test
     fun `strips json fences`() {
         val fenced = "```json\n{\"total\":\"9.00\"}\n```"
-        assertEquals("{\"total\":\"9.00\"}", ReceiptResponseParser.stripMarkdownFences(fenced))
+        assertEquals("{\"total\":\"9.00\"}", ReceiptResponseParser.extractJsonObject(fenced))
     }
 
     @Test
     fun `strips bare fences`() {
         val fenced = "```\n{\"total\":\"9.00\"}\n```"
-        assertEquals("{\"total\":\"9.00\"}", ReceiptResponseParser.stripMarkdownFences(fenced))
+        assertEquals("{\"total\":\"9.00\"}", ReceiptResponseParser.extractJsonObject(fenced))
     }
 
     @Test
     fun `leaves plain json untouched`() {
-        assertEquals("{\"a\":1}", ReceiptResponseParser.stripMarkdownFences("{\"a\":1}"))
+        assertEquals("{\"a\":1}", ReceiptResponseParser.extractJsonObject("{\"a\":1}"))
+    }
+
+    @Test
+    fun `pulls json out of surrounding prose`() {
+        val chatty = """
+            Here is the receipt data:
+            ```json
+            {"total":"9.00"}
+            ```
+            Hope this helps!
+        """.trimIndent()
+        assertEquals("{\"total\":\"9.00\"}", ReceiptResponseParser.extractJsonObject(chatty))
+    }
+
+    @Test
+    fun `returns trimmed input when there is no json object`() {
+        assertEquals("sorry", ReceiptResponseParser.extractJsonObject("  sorry  "))
     }
 
     // --- parseExtraction ---
@@ -185,9 +202,23 @@ class ReceiptResponseParserTest {
     }
 
     @Test
-    fun `future datetime is rejected`() {
-        assertNull(parse("2026-07-19 12:01"))
+    fun `far future datetime is rejected`() {
+        assertNull(parse("2026-07-19 12:16"))
         assertNull(parse("2027-01-01 10:00"))
+    }
+
+    @Test
+    fun `datetime within clock skew tolerance is clamped to now`() {
+        // Merchant terminals run a few minutes fast; keep the receipt rather than
+        // dropping its timestamp, but never store a future date.
+        assertEquals(
+            ReceiptResponseParser.ReceiptMoment(nowMillis, hasTime = true),
+            parse("2026-07-19 12:01")
+        )
+        assertEquals(
+            ReceiptResponseParser.ReceiptMoment(nowMillis, hasTime = true),
+            parse("2026-07-19 12:15")
+        )
     }
 
     @Test
