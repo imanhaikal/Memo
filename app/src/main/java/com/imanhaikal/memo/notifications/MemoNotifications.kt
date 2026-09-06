@@ -100,13 +100,17 @@ object MemoNotifications {
         this.description = description
     }
 
-    private fun show(context: Context, channelId: String, id: Int, text: NotificationText) {
+    /**
+     * Returns whether the notification actually reached the system, so a caller that keeps a
+     * once-a-day guard can avoid burning it on a post that was never made.
+     */
+    private fun show(context: Context, channelId: String, id: Int, text: NotificationText): Boolean {
         // On API 33+ posting without the runtime permission is silently dropped; checking
         // keeps that from looking like a bug in the scheduling.
-        if (!hasPermission(context)) return
-        runCatching {
+        if (!hasPermission(context)) return false
+        return runCatching {
             NotificationManagerCompat.from(context).notify(id, build(context, channelId, text))
-        }
+        }.isSuccess
     }
 
     private fun build(context: Context, channelId: String, text: NotificationText): Notification {

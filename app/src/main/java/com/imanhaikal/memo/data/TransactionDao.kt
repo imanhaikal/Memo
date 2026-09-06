@@ -24,19 +24,6 @@ interface TransactionDao {
         ORDER BY date DESC
         """
     )
-    fun observeForCycle(
-        budgetId: Long,
-        startMillis: Long,
-        endMillisExclusive: Long
-    ): Flow<List<Transaction>>
-
-    @Query(
-        """
-        SELECT * FROM transactions
-        WHERE budgetId = :budgetId AND date >= :startMillis AND date < :endMillisExclusive
-        ORDER BY date DESC
-        """
-    )
     suspend fun getForCycle(
         budgetId: Long,
         startMillis: Long,
@@ -79,10 +66,6 @@ interface TransactionDao {
                            OR description LIKE '%' || :query || '%')
           AND (:categoryId IS NULL OR category = :categoryId)
           AND (:type IS NULL OR type = :type)
-          AND (:minCents IS NULL OR amount >= :minCents)
-          AND (:maxCents IS NULL OR amount <= :maxCents)
-          AND (:fromMillis IS NULL OR date >= :fromMillis)
-          AND (:toMillis IS NULL OR date < :toMillis)
         ORDER BY date DESC
         """
     )
@@ -90,11 +73,7 @@ interface TransactionDao {
         budgetId: Long,
         query: String,
         categoryId: String?,
-        type: String?,
-        minCents: Long?,
-        maxCents: Long?,
-        fromMillis: Long?,
-        toMillis: Long?
+        type: String?
     ): Flow<List<Transaction>>
 
     /** True when this rule already posted an occurrence covering [dayStart]..[dayEndExclusive]. */

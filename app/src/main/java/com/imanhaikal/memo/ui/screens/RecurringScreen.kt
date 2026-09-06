@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -20,7 +19,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -41,6 +39,7 @@ import com.imanhaikal.memo.data.RecurringRule
 import com.imanhaikal.memo.data.TransactionType
 import com.imanhaikal.memo.ui.components.MemoCard
 import com.imanhaikal.memo.ui.components.MemoIconButton
+import com.imanhaikal.memo.ui.components.MemoScreenHeader
 import com.imanhaikal.memo.ui.dialogs.RecurringRuleDialog
 import com.imanhaikal.memo.ui.theme.AppColors
 import com.imanhaikal.memo.utils.CurrencyUtils
@@ -78,26 +77,11 @@ fun RecurringScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(start = 8.dp, end = 24.dp, top = 16.dp, bottom = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            MemoScreenHeader(
+                title = "Recurring",
+                onBack = onBack,
+                bottomPadding = 4.dp
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    MemoIconButton(
-                        onClick = onBack,
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = "Back"
-                    )
-                    Text(
-                        text = "Recurring",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = AppColors.TextPrimary
-                    )
-                }
                 MemoIconButton(
                     onClick = {
                         haptic.click()

@@ -18,8 +18,7 @@ data class WidgetSnapshot(
     val availableTodayCents: Long,
     val dailyLimitCents: Long,
     val currencyCode: String,
-    val status: BudgetStatus,
-    val updatedAtMillis: Long
+    val status: BudgetStatus
 ) {
     companion object {
         val EMPTY = WidgetSnapshot(
@@ -28,8 +27,7 @@ data class WidgetSnapshot(
             availableTodayCents = 0L,
             dailyLimitCents = 0L,
             currencyCode = "MYR",
-            status = BudgetStatus.ON_TRACK,
-            updatedAtMillis = 0L
+            status = BudgetStatus.ON_TRACK
         )
     }
 }
@@ -54,7 +52,6 @@ class WidgetSnapshotRepository(private val context: Context) {
         val DAILY_LIMIT = longPreferencesKey("daily_limit")
         val CURRENCY = stringPreferencesKey("currency")
         val STATUS = stringPreferencesKey("status")
-        val UPDATED_AT = longPreferencesKey("updated_at")
     }
 
     suspend fun read(): WidgetSnapshot {
@@ -67,8 +64,7 @@ class WidgetSnapshotRepository(private val context: Context) {
             currencyCode = preferences[CURRENCY] ?: "MYR",
             status = preferences[STATUS]
                 ?.let { name -> BudgetStatus.entries.firstOrNull { it.name == name } }
-                ?: BudgetStatus.ON_TRACK,
-            updatedAtMillis = preferences[UPDATED_AT] ?: 0L
+                ?: BudgetStatus.ON_TRACK
         )
     }
 
@@ -80,7 +76,6 @@ class WidgetSnapshotRepository(private val context: Context) {
             preferences[DAILY_LIMIT] = snapshot.dailyLimitCents
             preferences[CURRENCY] = snapshot.currencyCode
             preferences[STATUS] = snapshot.status.name
-            preferences[UPDATED_AT] = snapshot.updatedAtMillis
         }
     }
 }

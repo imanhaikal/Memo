@@ -18,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -26,14 +27,20 @@ import com.imanhaikal.memo.utils.CurrencyUtils
 import com.imanhaikal.memo.utils.rememberStrongHaptics
 
 /**
- * Currency dropdown shared by Settings and the budget editor. Extracted so a second copy
- * of the menu doesn't drift from the first.
+ * Currency dropdown shared by Settings, the budget editor and setup. Extracted so the
+ * three copies of the menu can't drift from each other.
+ *
+ * [containerColor] and [borderColor] exist because the same control needs two fills: on
+ * Settings it sits on the page background and reads as a card, while inside a dialog it
+ * sits beside [MemoInput] fields and has to match them.
  */
 @Composable
 fun CurrencyPicker(
     selectedCurrency: String,
     onCurrencySelected: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    containerColor: Color = AppColors.Surface,
+    borderColor: Color = AppColors.Border
 ) {
     val haptic = rememberStrongHaptics()
     var expanded by rememberSaveable { mutableStateOf(false) }
@@ -45,9 +52,9 @@ fun CurrencyPicker(
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.outlinedButtonColors(
                 contentColor = AppColors.TextPrimary,
-                containerColor = AppColors.Surface
+                containerColor = containerColor
             ),
-            border = BorderStroke(1.dp, AppColors.Border)
+            border = BorderStroke(1.dp, borderColor)
         ) {
             Text(
                 text = CurrencyUtils.SUPPORTED_CURRENCIES[selectedCurrency] ?: selectedCurrency,

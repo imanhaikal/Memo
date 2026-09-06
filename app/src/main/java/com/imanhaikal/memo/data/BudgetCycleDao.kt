@@ -27,9 +27,6 @@ interface BudgetCycleDao {
     @Query("SELECT * FROM budget_cycles WHERE budgetId = :budgetId AND closedAt IS NULL LIMIT 1")
     suspend fun getOpenCycle(budgetId: Long): BudgetCycle?
 
-    @Query("SELECT * FROM budget_cycles WHERE budgetId = :budgetId ORDER BY cycleIndex DESC LIMIT 1")
-    suspend fun getLatest(budgetId: Long): BudgetCycle?
-
     /**
      * The row already holding [cycleIndex], if any.
      *

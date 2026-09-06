@@ -26,6 +26,7 @@ import com.imanhaikal.memo.domain.RecurringScheduleCalculator
 import com.imanhaikal.memo.domain.DayTicker
 import com.imanhaikal.memo.domain.SystemDayTicker
 import com.imanhaikal.memo.notifications.MemoNotifications
+import com.imanhaikal.memo.notifications.OverLimitNotifier
 import com.imanhaikal.memo.widget.WidgetUpdater
 import com.imanhaikal.memo.work.MemoWorkScheduler
 import kotlinx.coroutines.CoroutineScope
@@ -58,12 +59,19 @@ class MemoApplication : Application() {
                 container.transactionDao.getAllTransactions(),
                 container.budgetRepository.observeActiveBudget(),
                 container.dayTicker.today
-            ) { _, _, _ -> Unit }
-                .collect { WidgetUpdater.refresh(this@MemoApplication) }
+            ) { _, _, today -> today }
+                .collect { today ->
+                    WidgetUpdater.refresh(this@MemoApplication)
+                    // Never let a notification failure take the widget refresh down with it.
+                    runCatching { container.overLimitNotifier.checkAndNotify(today) }
+                }
         }
 
         container.applicationScope.launch {
             container.startupMigration.await()
+            // The migration ran and the database opened, so the pre-upgrade copy has done
+            // its job. Without this every upgraded install keeps a permanent duplicate.
+            PreUpgradeSnapshot.discard(this@MemoApplication)
             // The worker is the convenience; this is the guarantee. Vendor battery
             // managers suppress background work for days, and a rent expense that
             // silently never posts is a data-integrity bug, not a missed reminder.
@@ -80,17 +88,14 @@ class MemoApplication : Application() {
 }
 
 interface AppContainer {
-    val database: AppDatabase
     val transactionDao: TransactionDao
-    val budgetDao: BudgetDao
-    val budgetCycleDao: BudgetCycleDao
-    val categoryCapDao: CategoryCapDao
     val recurringRuleDao: RecurringRuleDao
     val budgetRepository: BudgetRepository
     val backupRepository: BackupRepository
     val notificationPreferences: NotificationPreferencesStore
     val postRecurring: PostRecurringUseCase
     val budgetSummaryProvider: BudgetSummaryProvider
+    val overLimitNotifier: OverLimitNotifier
     val budgetPreferences: BudgetPreferences
     val clock: Clock
     val receiptScanner: ReceiptScanner
@@ -107,15 +112,15 @@ interface AppContainer {
 
 class DefaultAppContainer(private val context: Application) : AppContainer {
 
-    override val database: AppDatabase by lazy { AppDatabase.getDatabase(context) }
+    private val database: AppDatabase by lazy { AppDatabase.getDatabase(context) }
 
     override val transactionDao: TransactionDao by lazy { database.transactionDao() }
 
-    override val budgetDao: BudgetDao by lazy { database.budgetDao() }
+    private val budgetDao: BudgetDao by lazy { database.budgetDao() }
 
-    override val budgetCycleDao: BudgetCycleDao by lazy { database.budgetCycleDao() }
+    private val budgetCycleDao: BudgetCycleDao by lazy { database.budgetCycleDao() }
 
-    override val categoryCapDao: CategoryCapDao by lazy { database.categoryCapDao() }
+    private val categoryCapDao: CategoryCapDao by lazy { database.categoryCapDao() }
 
     override val recurringRuleDao: RecurringRuleDao by lazy { database.recurringRuleDao() }
 
@@ -185,6 +190,15 @@ class DefaultAppContainer(private val context: Application) : AppContainer {
             budgetRepository = budgetRepository,
             transactionDao = transactionDao,
             calculator = BudgetCalculatorUseCase(clock.zone)
+        )
+    }
+
+    override val overLimitNotifier: OverLimitNotifier by lazy {
+        OverLimitNotifier(
+            summaryProvider = budgetSummaryProvider,
+            preferences = notificationPreferences,
+            clock = clock,
+            notify = { text -> MemoNotifications.showOverLimit(context, text) }
         )
     }
 

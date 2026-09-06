@@ -35,8 +35,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
@@ -66,6 +64,8 @@ import com.imanhaikal.memo.data.NotificationSettings
 import com.imanhaikal.memo.data.ThemeMode
 import com.imanhaikal.memo.notifications.MemoNotifications
 import com.imanhaikal.memo.ui.BudgetUiState
+import com.imanhaikal.memo.ui.components.CurrencyPicker
+import com.imanhaikal.memo.ui.components.MemoChip
 import com.imanhaikal.memo.ui.components.MemoIconButton
 import com.imanhaikal.memo.ui.components.MemoInput
 import com.imanhaikal.memo.ui.components.PressScale
@@ -113,7 +113,6 @@ fun SettingsScreen(
     }
     var daysInput by rememberSaveable(state.totalDays) { mutableStateOf(state.totalDays.toString()) }
     var selectedCurrency by rememberSaveable(state.currencyCode) { mutableStateOf(state.currencyCode) }
-    var showCurrencyDropdown by rememberSaveable { mutableStateOf(false) }
     var showResetDialog by rememberSaveable { mutableStateOf(false) }
     var showClearDialog by rememberSaveable { mutableStateOf(false) }
     var showCurrencyChangeDialog by rememberSaveable { mutableStateOf(false) }
@@ -274,48 +273,11 @@ fun SettingsScreen(
                     color = AppColors.TextPrimary
                 )
                 
-                Box {
-                    OutlinedButton(
-                        onClick = { showCurrencyDropdown = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = AppColors.TextPrimary,
-                            containerColor = AppColors.Surface
-                        ),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Border)
-                    ) {
-                        Text(
-                            text = CurrencyUtils.SUPPORTED_CURRENCIES[selectedCurrency] ?: selectedCurrency,
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(vertical = 4.dp).weight(1f),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Start
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded = showCurrencyDropdown,
-                        onDismissRequest = { showCurrencyDropdown = false },
-                        modifier = Modifier.background(AppColors.Surface)
-                    ) {
-                        CurrencyUtils.SUPPORTED_CURRENCIES.forEach { (code, label) ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = label,
-                                        color = if(code == selectedCurrency) AppColors.TextPrimary else AppColors.TextSecondary,
-                                        fontWeight = if(code == selectedCurrency) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                },
-                                onClick = {
-                                    haptic.tick()
-                                    selectedCurrency = code
-                                    showCurrencyDropdown = false
-                                }
-                            )
-                        }
-                    }
-                }
+                CurrencyPicker(
+                    selectedCurrency = selectedCurrency,
+                    onCurrencySelected = { selectedCurrency = it },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             // Appearance Selector — applies immediately, no Save needed
@@ -1040,36 +1002,12 @@ private fun ThemeModeChip(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val interaction = remember { MutableInteractionSource() }
-    // Cross-fade selection rather than hard-swapping the fill
-    val background by animateColorAsState(
-        targetValue = if (selected) AppColors.Yellow else AppColors.Field,
-        animationSpec = tween(durationMillis = 180),
-        label = "themeChipBackground"
+    MemoChip(
+        label = label,
+        selected = selected,
+        onClick = onClick,
+        horizontalPadding = 16.dp,
+        verticalPadding = 10.dp,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
     )
-    val contentColor by animateColorAsState(
-        targetValue = if (selected) AppColors.OnYellow else AppColors.TextSecondary,
-        animationSpec = tween(durationMillis = 180),
-        label = "themeChipContent"
-    )
-    Box(
-        modifier = Modifier
-            .springPress(interaction, pressedScale = PressScale.Surface)
-            .clip(RoundedCornerShape(50))
-            .background(background)
-            .clickable(
-                interactionSource = interaction,
-                indication = LocalIndication.current,
-                onClick = onClick
-            )
-            .padding(horizontal = 16.dp, vertical = 10.dp)
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-            ),
-            color = contentColor
-        )
-    }
 }

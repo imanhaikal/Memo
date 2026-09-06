@@ -2,6 +2,7 @@ package com.imanhaikal.memo.data.receipt
 
 import com.imanhaikal.memo.data.Category
 import com.imanhaikal.memo.data.Transaction
+import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
@@ -63,7 +64,7 @@ class GeminiReceiptServiceTest {
     }
 
     @Test
-    fun `valid response returns success and sends expected request`() {
+    fun `valid response returns success and sends expected request`() = runTest {
         server.enqueue(
             MockResponse().setBody(successBody("""{"total":"12.50","note":"Tesco","confidence":0.9}"""))
         )
@@ -84,7 +85,7 @@ class GeminiReceiptServiceTest {
     }
 
     @Test
-    fun `response with details carries category, description and datetime`() {
+    fun `response with details carries category, description and datetime`() = runTest {
         server.enqueue(
             MockResponse().setBody(
                 successBody(
@@ -113,7 +114,7 @@ class GeminiReceiptServiceTest {
     }
 
     @Test
-    fun `date-only receipt datetime carries hasTime false`() {
+    fun `date-only receipt datetime carries hasTime false`() = runTest {
         server.enqueue(
             MockResponse().setBody(
                 successBody("""{"total":"5.00","note":"Kiosk","datetime":"2026-07-18"}""")
@@ -127,7 +128,7 @@ class GeminiReceiptServiceTest {
     }
 
     @Test
-    fun `response without details falls back to empty defaults`() {
+    fun `response without details falls back to empty defaults`() = runTest {
         server.enqueue(
             MockResponse().setBody(successBody("""{"total":"12.50","note":"Tesco","confidence":0.9}"""))
         )
@@ -140,7 +141,7 @@ class GeminiReceiptServiceTest {
     }
 
     @Test
-    fun `unknown category id maps to other`() {
+    fun `unknown category id maps to other`() = runTest {
         server.enqueue(
             MockResponse().setBody(
                 successBody("""{"total":"5.00","note":"Kiosk","category":"gadgets"}""")
@@ -153,7 +154,7 @@ class GeminiReceiptServiceTest {
     }
 
     @Test
-    fun `over-long note and description are truncated to the shared limits`() {
+    fun `over-long note and description are truncated to the shared limits`() = runTest {
         // A prefill longer than the dialog's own cap used to lock its edit field.
         server.enqueue(
             MockResponse().setBody(
@@ -171,7 +172,7 @@ class GeminiReceiptServiceTest {
     }
 
     @Test
-    fun `fenced json payload still succeeds`() {
+    fun `fenced json payload still succeeds`() = runTest {
         server.enqueue(
             MockResponse().setBody(successBody("```json\n{\"total\":\"7.00\",\"note\":\"KFC\"}\n```"))
         )
@@ -180,7 +181,7 @@ class GeminiReceiptServiceTest {
     }
 
     @Test
-    fun `zero total maps to unreadable`() {
+    fun `zero total maps to unreadable`() = runTest {
         server.enqueue(
             MockResponse().setBody(successBody("""{"total":"0","note":"","confidence":0}"""))
         )
@@ -192,7 +193,7 @@ class GeminiReceiptServiceTest {
     }
 
     @Test
-    fun `server error maps to api error`() {
+    fun `server error maps to api error`() = runTest {
         server.enqueue(MockResponse().setResponseCode(500))
 
         assertEquals(
@@ -202,7 +203,7 @@ class GeminiReceiptServiceTest {
     }
 
     @Test
-    fun `rate limit maps to api error`() {
+    fun `rate limit maps to api error`() = runTest {
         server.enqueue(MockResponse().setResponseCode(429))
 
         assertEquals(
@@ -212,7 +213,7 @@ class GeminiReceiptServiceTest {
     }
 
     @Test
-    fun `safety-blocked candidate maps to parse error`() {
+    fun `safety-blocked candidate maps to parse error`() = runTest {
         // A blocked response is a 200 with a candidate that carries no content.
         server.enqueue(
             MockResponse().setBody("""{"candidates": [{"finishReason": "SAFETY"}]}""")
@@ -225,7 +226,7 @@ class GeminiReceiptServiceTest {
     }
 
     @Test
-    fun `empty candidates maps to parse error`() {
+    fun `empty candidates maps to parse error`() = runTest {
         server.enqueue(MockResponse().setBody("""{"candidates": []}"""))
 
         assertEquals(
@@ -235,7 +236,7 @@ class GeminiReceiptServiceTest {
     }
 
     @Test
-    fun `malformed body maps to parse error`() {
+    fun `malformed body maps to parse error`() = runTest {
         server.enqueue(MockResponse().setBody("<html>gateway</html>"))
 
         assertEquals(
@@ -245,7 +246,7 @@ class GeminiReceiptServiceTest {
     }
 
     @Test
-    fun `connection failure maps to network error`() {
+    fun `connection failure maps to network error`() = runTest {
         server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
 
         assertEquals(

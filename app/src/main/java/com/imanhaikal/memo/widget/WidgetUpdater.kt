@@ -32,8 +32,7 @@ object WidgetUpdater {
                     availableTodayCents = summary.availableTodayCents,
                     dailyLimitCents = summary.dailyLimitCents,
                     currencyCode = summary.currencyCode,
-                    status = summary.status,
-                    updatedAtMillis = container.clock.millis()
+                    status = summary.status
                 )
             }
 

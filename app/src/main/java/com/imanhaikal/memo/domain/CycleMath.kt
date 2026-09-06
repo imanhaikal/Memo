@@ -1,7 +1,5 @@
 package com.imanhaikal.memo.domain
 
-import com.imanhaikal.memo.data.Transaction
-import com.imanhaikal.memo.data.TransactionType
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -33,12 +31,4 @@ object CycleMath {
 
     fun toEpochDay(millis: Long, zone: ZoneId): Long =
         Instant.ofEpochMilli(millis).atZone(zone).toLocalDate().toEpochDay()
-
-    /** Gross expense total, ignoring income. */
-    fun sumExpenses(transactions: List<Transaction>): Long =
-        transactions.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
-
-    /** Gross income total, ignoring expenses. */
-    fun sumIncome(transactions: List<Transaction>): Long =
-        transactions.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
 }

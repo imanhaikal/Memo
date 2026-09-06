@@ -65,12 +65,6 @@ enum class BudgetStatus {
     ON_TRACK, CAREFUL, OVER_LIMIT
 }
 
-/** Whether a backup import is in flight; export is fast enough to need no state. */
-sealed interface BackupState {
-    data object Idle : BackupState
-    data object Working : BackupState
-}
-
 sealed interface ScanState {
     data object Idle : ScanState
     data object Processing : ScanState
@@ -114,9 +108,6 @@ data class BudgetUiState(
     /** Net of income, matching the pool arithmetic. */
     val spentToday: Long = 0L,
     val spentThisCycle: Long = 0L,
-    /** Gross figures, for display where "spent" and "received" are shown separately. */
-    val expenseThisCycle: Long = 0L,
-    val incomeThisCycle: Long = 0L,
     val categoryTotals: List<CategoryTotal> = emptyList(),
     /** First day of the active cycle; null until setup completes. */
     val cycleStartDate: LocalDate? = null,
@@ -124,10 +115,7 @@ data class BudgetUiState(
     val currencyCode: String = "MYR",
     val budgetId: Long = 0L,
     val budgetName: String = "",
-    val cycleIndex: Int = 0,
-    val allBudgets: List<Budget> = emptyList(),
-    val today: LocalDate? = null,
-    val daysPassed: Int = 0
+    val allBudgets: List<Budget> = emptyList()
 )
 
 class MainViewModel(
@@ -420,11 +408,7 @@ class MainViewModel(
                         budgetId = budget.id,
                         query = criteria.query.trim(),
                         categoryId = criteria.category?.id,
-                        type = criteria.type?.id,
-                        minCents = criteria.minCents,
-                        maxCents = criteria.maxCents,
-                        fromMillis = criteria.fromMillis,
-                        toMillis = criteria.toMillis
+                        type = criteria.type?.id
                     )
                 }
             }
@@ -487,17 +471,12 @@ class MainViewModel(
 
     // ---- Backup ----------------------------------------------------------------------
 
-    private val _backupState = MutableStateFlow<BackupState>(BackupState.Idle)
-    val backupState: StateFlow<BackupState> = _backupState.asStateFlow()
-
     /** Serializes the whole database; the caller writes the bytes to the chosen file. */
     suspend fun buildBackupJson(): String = backupRepository.export()
 
     fun importBackup(contents: String, mode: ImportMode, onFinished: (String) -> Unit) {
         viewModelScope.launch {
-            _backupState.value = BackupState.Working
             val result = backupRepository.import(contents, mode)
-            _backupState.value = BackupState.Idle
             onFinished(
                 when (result) {
                     is ImportResult.Success -> buildString {

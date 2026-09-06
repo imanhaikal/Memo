@@ -14,12 +14,9 @@ import java.time.LocalDate
  * that path, and it runs the same calculator so the two can't drift.
  */
 data class BudgetSummary(
-    val budgetId: Long,
     val budgetName: String,
     val availableTodayCents: Long,
     val dailyLimitCents: Long,
-    val spentTodayCents: Long,
-    val daysRemaining: Int,
     val currencyCode: String,
     val status: BudgetStatus
 )
@@ -45,12 +42,9 @@ class BudgetSummaryProvider(
             today = today
         )
         return BudgetSummary(
-            budgetId = budget.id,
             budgetName = budget.name,
             availableTodayCents = state.availableToday,
             dailyLimitCents = state.dailyLimit,
-            spentTodayCents = state.spentToday,
-            daysRemaining = state.daysRemaining,
             currencyCode = budget.currencyCode,
             status = state.status
         )

@@ -108,8 +108,7 @@ sealed interface ImportResult {
     data class Success(
         val budgets: Int,
         val transactions: Int,
-        val skipped: Int,
-        val mode: ImportMode
+        val skipped: Int
     ) : ImportResult
 
     data class Failure(val reason: ImportFailure) : ImportResult

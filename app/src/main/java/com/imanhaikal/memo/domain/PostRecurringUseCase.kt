@@ -1,19 +1,11 @@
 package com.imanhaikal.memo.domain
 
-import com.imanhaikal.memo.data.RecurringRule
 import com.imanhaikal.memo.data.RecurringRuleDao
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.data.TransactionDao
 import com.imanhaikal.memo.data.TransactionRunner
 import java.time.Clock
 import java.time.LocalDate
-
-/** What a catch-up actually wrote, so the caller can notify about it. */
-data class PostedOccurrence(
-    val rule: RecurringRule,
-    val date: LocalDate,
-    val transaction: Transaction
-)
 
 /**
  * Posts recurring rules that have fallen due.
@@ -35,8 +27,9 @@ class PostRecurringUseCase(
     private val clock: Clock
 ) {
 
-    suspend fun catchUp(today: LocalDate = LocalDate.now(clock)): List<PostedOccurrence> {
-        val posted = mutableListOf<PostedOccurrence>()
+    /** Returns the transactions it wrote, so the caller can notify about them. */
+    suspend fun catchUp(today: LocalDate = LocalDate.now(clock)): List<Transaction> {
+        val posted = mutableListOf<Transaction>()
 
         recurringRuleDao.getActiveRules().forEach { rule ->
             val due = calculator.dueDates(rule, today)
@@ -66,7 +59,7 @@ class PostRecurringUseCase(
                         recurringRuleId = rule.id
                     )
                     transactionDao.insertTransaction(transaction)
-                    posted += PostedOccurrence(rule, date, transaction)
+                    posted += transaction
                 }
 
                 val next = calculator.nextDueDate(rule, due.last())

@@ -51,8 +51,6 @@ class BudgetSummaryProviderTest {
 
         assertEquals(10_000L, summary.dailyLimitCents)
         assertEquals(7_500L, summary.availableTodayCents)
-        assertEquals(2_500L, summary.spentTodayCents)
-        assertEquals(30, summary.daysRemaining)
         assertEquals("MYR", summary.currencyCode)
         assertEquals(BudgetStatus.ON_TRACK, summary.status)
     }
@@ -80,7 +78,7 @@ class BudgetSummaryProviderTest {
     fun `the summary follows the active budget`() = runTest {
         val harness = MemoTestHarness(clock, today)
         harness.seedBudget(amountCents = 300_000L, totalDays = 30, startDate = today, name = "Monthly")
-        val travel = harness.seedBudget(
+        harness.seedBudget(
             amountCents = 140_000L,
             totalDays = 14,
             startDate = today,
@@ -89,7 +87,6 @@ class BudgetSummaryProviderTest {
 
         val summary = provider(harness).summarizeActive(today)!!
 
-        assertEquals(travel.id, summary.budgetId)
         assertEquals("Travel", summary.budgetName)
         assertEquals(10_000L, summary.dailyLimitCents)
     }

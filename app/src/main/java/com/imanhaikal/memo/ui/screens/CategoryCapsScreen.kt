@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -20,7 +19,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -35,10 +33,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.imanhaikal.memo.R
 import com.imanhaikal.memo.data.Category
 import com.imanhaikal.memo.ui.components.MemoCard
-import com.imanhaikal.memo.ui.components.MemoIconButton
+import com.imanhaikal.memo.ui.components.MemoScreenHeader
 import com.imanhaikal.memo.ui.components.MemoInput
 import com.imanhaikal.memo.ui.components.iconRes
 import com.imanhaikal.memo.ui.theme.AppColors
@@ -69,24 +66,11 @@ fun CategoryCapsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(start = 8.dp, end = 24.dp, top = 16.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                MemoIconButton(
-                    onClick = onBack,
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back"
-                )
-                Text(
-                    text = "Category limits",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = AppColors.TextPrimary
-                )
-            }
+            MemoScreenHeader(
+                title = "Category limits",
+                onBack = onBack,
+                bottomPadding = 4.dp
+            )
         }
 
         item {

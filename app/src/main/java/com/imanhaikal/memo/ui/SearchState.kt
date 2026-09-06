@@ -14,13 +14,8 @@ import com.imanhaikal.memo.data.TransactionType
 data class SearchCriteria(
     val query: String = "",
     val category: Category? = null,
-    val type: TransactionType? = null,
-    val minCents: Long? = null,
-    val maxCents: Long? = null,
-    val fromMillis: Long? = null,
-    val toMillis: Long? = null
+    val type: TransactionType? = null
 ) {
     val isEmpty: Boolean
-        get() = query.isBlank() && category == null && type == null &&
-            minCents == null && maxCents == null && fromMillis == null && toMillis == null
+        get() = query.isBlank() && category == null && type == null
 }

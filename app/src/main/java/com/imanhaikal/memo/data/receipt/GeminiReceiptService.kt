@@ -8,6 +8,8 @@ import java.io.IOException
 import java.time.Clock
 import java.time.LocalDate
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.add
@@ -39,8 +41,11 @@ class GeminiReceiptService(
     }
 ) {
 
-    // Caller is responsible for running this on an IO dispatcher.
-    fun extractReceipt(jpegBase64: String): ScanOutcome {
+    suspend fun extractReceipt(jpegBase64: String): ScanOutcome =
+        withContext(Dispatchers.IO) { blockingExtract(jpegBase64) }
+
+    /** Blocking HTTP and parsing; only ever reached through [extractReceipt]. */
+    private fun blockingExtract(jpegBase64: String): ScanOutcome {
         val requestBody = json.encodeToString(buildRequest(jpegBase64))
             .toRequestBody("application/json".toMediaType())
         val request = Request.Builder()

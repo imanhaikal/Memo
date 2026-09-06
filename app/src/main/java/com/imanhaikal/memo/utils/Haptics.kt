@@ -12,6 +12,7 @@ import androidx.annotation.RequiresPermission
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 
 /**
@@ -221,16 +222,9 @@ class StrongHaptics(
 @Composable
 fun rememberStrongHaptics(): StrongHaptics {
     val context = LocalContext.current
-    val enabled = LocalHapticsEnabled.current
-    // Read the preference through a lambda so a toggle doesn't rebuild the instance
-    // (and re-run its capability probes) — the existing instance just starts returning
-    // early on its next call.
-    val enabledRef = rememberUpdatedStateOf(enabled)
-    return remember(context) { StrongHaptics(context) { enabledRef() } }
-}
-
-@Composable
-private fun rememberUpdatedStateOf(value: Boolean): () -> Boolean {
-    val state = androidx.compose.runtime.rememberUpdatedState(value)
-    return remember { { state.value } }
+    // Read the preference through the state object rather than the value so a toggle
+    // doesn't rebuild the instance (and re-run its capability probes) — the existing
+    // instance just starts returning early on its next call.
+    val enabled = rememberUpdatedState(LocalHapticsEnabled.current)
+    return remember(context) { StrongHaptics(context) { enabled.value } }
 }

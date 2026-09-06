@@ -14,14 +14,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,7 +34,8 @@ import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.data.TransactionType
 import com.imanhaikal.memo.ui.SearchCriteria
 import com.imanhaikal.memo.ui.components.MemoCard
-import com.imanhaikal.memo.ui.components.MemoIconButton
+import com.imanhaikal.memo.ui.components.MemoChip
+import com.imanhaikal.memo.ui.components.MemoScreenHeader
 import com.imanhaikal.memo.ui.components.MemoInput
 import com.imanhaikal.memo.ui.components.groupTransactionsByDay
 import com.imanhaikal.memo.ui.theme.AppColors
@@ -77,24 +76,11 @@ fun SearchScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(start = 8.dp, end = 24.dp, top = 16.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                MemoIconButton(
-                    onClick = onBack,
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back"
-                )
-                Text(
-                    text = "Search",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = AppColors.TextPrimary
-                )
-            }
+            MemoScreenHeader(
+                title = "Search",
+                onBack = onBack,
+                bottomPadding = 4.dp
+            )
         }
 
         item {
@@ -230,14 +216,11 @@ fun SearchScreen(
 
 @Composable
 private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Text(
-        text = label,
-        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-        color = if (selected) AppColors.OnYellow else AppColors.TextSecondary,
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(if (selected) AppColors.Yellow else AppColors.Field)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp)
+    MemoChip(
+        label = label,
+        selected = selected,
+        onClick = onClick,
+        horizontalPadding = 14.dp,
+        fontWeight = FontWeight.Bold
     )
 }

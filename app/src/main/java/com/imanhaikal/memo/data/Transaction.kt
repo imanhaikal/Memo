@@ -37,7 +37,12 @@ data class Transaction(
         get() = if (type == TransactionType.INCOME) -amount else amount
 
     companion object {
-        /** Hard caps on the free-text fields, shared by the scan pipeline and the expense dialog. */
+        /**
+         * Caps applied to AI-extracted text before it is offered to the user. The expense
+         * dialog deliberately does not enforce [NOTE_MAX_CHARS] on typing: a note is seeded
+         * from the stored row when editing, so capping there would truncate an existing
+         * longer note on the first keystroke.
+         */
         const val NOTE_MAX_CHARS = 40
         const val DESCRIPTION_MAX_CHARS = 280
     }

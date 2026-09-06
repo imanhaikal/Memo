@@ -46,28 +46,12 @@ object PreUpgradeSnapshot {
         }
     }
 
-    fun hasSnapshot(context: Context): Boolean =
-        File(File(context.filesDir, BACKUP_DIR), DB_NAME).exists()
-
     /**
-     * Puts the snapshot back. The caller is responsible for restarting the process
-     * afterwards — Room caches an open handle to the file being replaced.
+     * Deletes the snapshot. Called once the migrated database has opened and the startup
+     * bootstrap has completed — past that point the migration is known to have worked, and
+     * keeping the copy would leave every upgraded install carrying a permanent duplicate
+     * of its own database.
      */
-    fun restore(context: Context): Boolean = runCatching {
-        val target = File(context.filesDir, BACKUP_DIR)
-        if (!File(target, DB_NAME).exists()) return false
-        val database = context.getDatabasePath(DB_NAME)
-        suffixes.forEach { suffix ->
-            val source = File(target, DB_NAME + suffix)
-            val destination = File(database.path + suffix)
-            if (source.exists()) source.copyTo(destination, overwrite = true) else destination.delete()
-        }
-        true
-    }.getOrElse {
-        Log.w(TAG, "Could not restore pre-upgrade snapshot", it)
-        false
-    }
-
     fun discard(context: Context) {
         runCatching { File(context.filesDir, BACKUP_DIR).deleteRecursively() }
     }

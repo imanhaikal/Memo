@@ -33,7 +33,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.imanhaikal.memo.data.Transaction
-import com.imanhaikal.memo.data.TransactionType
 import com.imanhaikal.memo.data.backup.ImportMode
 import com.imanhaikal.memo.ui.components.DashboardSkeleton
 import com.imanhaikal.memo.ui.components.MemoFab
@@ -87,7 +86,6 @@ fun MemoApp(
     CompositionLocalProvider(LocalHapticsEnabled provides hapticsEnabled) {
     var showAddExpenseDialog by rememberSaveable { mutableStateOf(false) }
     var transactionToEditId by rememberSaveable { mutableStateOf<Int?>(null) }
-    var addAsIncome by rememberSaveable { mutableStateOf(false) }
     var showScanChooser by rememberSaveable { mutableStateOf(false) }
     // Uri kept as String so it survives process death while the camera app is open
     var cameraImageUriString by rememberSaveable { mutableStateOf<String?>(null) }
@@ -105,7 +103,6 @@ fun MemoApp(
     LaunchedEffect(quickAdd, state.isSetup) {
         if (quickAdd && state.isSetup) {
             transactionToEditId = null
-            addAsIncome = false
             showAddExpenseDialog = true
             quickAddRequests.value = false
         }
@@ -186,7 +183,6 @@ fun MemoApp(
                         }
                         MemoFab(onClick = {
                             transactionToEditId = null
-                            addAsIncome = false
                             showAddExpenseDialog = true
                         })
                     }
@@ -220,7 +216,6 @@ fun MemoApp(
                                 onOpenSearch = { backStack.push(Screen.Search) },
                                 onAddExpense = {
                                     transactionToEditId = null
-                                    addAsIncome = false
                                     showAddExpenseDialog = true
                                 },
                                 onEditTransaction = { transaction ->
@@ -347,11 +342,6 @@ fun MemoApp(
                 if (showAddExpenseDialog) {
                     AddExpenseDialog(
                         transaction = transactionToEdit,
-                        initialType = if (addAsIncome) {
-                            TransactionType.INCOME
-                        } else {
-                            TransactionType.EXPENSE
-                        },
                         onConfirm = { draft ->
                             if (transactionToEdit != null) {
                                 viewModel.updateTransaction(
@@ -452,7 +442,6 @@ fun MemoApp(
                         onManual = {
                             viewModel.clearScanState()
                             transactionToEditId = null
-                            addAsIncome = false
                             showAddExpenseDialog = true
                         },
                         onDismiss = { viewModel.clearScanState() }

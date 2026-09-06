@@ -32,6 +32,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.imanhaikal.memo.data.Cadence
 import com.imanhaikal.memo.data.RecurringRule
+import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.data.TransactionType
 import com.imanhaikal.memo.ui.components.MemoDialog
 import com.imanhaikal.memo.ui.components.MemoInput
@@ -135,7 +136,7 @@ fun RecurringRuleDialog(
 
         MemoInput(
             value = noteText,
-            onValueChange = { noteText = it.take(NOTE_MAX_CHARS) },
+            onValueChange = { noteText = it.take(Transaction.NOTE_MAX_CHARS) },
             label = "What is it",
             placeholder = "e.g. Rent",
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -217,4 +218,3 @@ private fun <T> SegmentedRow(
     }
 }
 
-private const val NOTE_MAX_CHARS = 40

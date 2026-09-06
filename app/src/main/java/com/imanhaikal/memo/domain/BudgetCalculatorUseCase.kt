@@ -4,7 +4,6 @@ import com.imanhaikal.memo.data.Budget
 import com.imanhaikal.memo.data.BudgetCycle
 import com.imanhaikal.memo.data.Category
 import com.imanhaikal.memo.data.Transaction
-import com.imanhaikal.memo.data.TransactionType
 import com.imanhaikal.memo.ui.BudgetStatus
 import com.imanhaikal.memo.ui.BudgetUiState
 import com.imanhaikal.memo.ui.CategoryTotal
@@ -38,7 +37,6 @@ class BudgetCalculatorUseCase(internal val zone: ZoneId) {
             day >= cycle.startDate && day < cycle.endDateExclusive
         }
 
-        val daysPassed = (todayDay - cycle.startDate).toInt()
         val daysRemaining = max(1, (cycle.endDateExclusive - todayDay).toInt())
 
         val (todayRows, earlierRows) = activeTransactions.partition { transaction ->
@@ -62,13 +60,6 @@ class BudgetCalculatorUseCase(internal val zone: ZoneId) {
         } else {
             baselineLimit
         }
-
-        val expenseThisCycle = activeTransactions
-            .filter { it.type == TransactionType.EXPENSE }
-            .sumOf { it.amount }
-        val incomeThisCycle = activeTransactions
-            .filter { it.type == TransactionType.INCOME }
-            .sumOf { it.amount }
 
         val categoryTotals = activeTransactions
             .groupBy { it.category }
@@ -101,18 +92,13 @@ class BudgetCalculatorUseCase(internal val zone: ZoneId) {
             totalBudget = cycle.budgetAmountCents,
             spentToday = netSpentToday,
             spentThisCycle = netSpentBeforeToday + netSpentToday,
-            expenseThisCycle = expenseThisCycle,
-            incomeThisCycle = incomeThisCycle,
             categoryTotals = categoryTotals,
             cycleStartDate = startDate,
             totalDays = budget.totalDays,
             currencyCode = budget.currencyCode,
             budgetId = budget.id,
             budgetName = budget.name,
-            cycleIndex = cycle.cycleIndex,
-            allBudgets = allBudgets,
-            today = today,
-            daysPassed = daysPassed
+            allBudgets = allBudgets
         )
     }
 }

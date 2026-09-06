@@ -89,13 +89,14 @@ class MidnightRolloverTest {
         backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
         harness.seedBudget(amountCents = 300_000L, totalDays = 7, startDate = day1)
         testDispatcher.scheduler.advanceUntilIdle()
-        assertEquals(0, viewModel.uiState.value.cycleIndex)
+        assertEquals(0, harness.cycleDao.rows.value.single().cycleIndex)
 
         harness.dayTicker.advanceTo(day1.plusDays(7))
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(1, viewModel.uiState.value.cycleIndex)
         val closed = harness.cycleDao.rows.value.single { it.cycleIndex == 0 }
         assertNotNull(closed.closedAt)
+        // ...and the next one opened, rather than leaving the budget with no open cycle.
+        assertEquals(1, harness.cycleDao.rows.value.single { it.closedAt == null }.cycleIndex)
     }
 }

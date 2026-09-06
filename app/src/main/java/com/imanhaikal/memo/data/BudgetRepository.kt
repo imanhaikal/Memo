@@ -29,11 +29,11 @@ class BudgetRepository(
     fun observeBudgets(): Flow<List<Budget>> = budgetDao.observeAll()
 
     /**
-     * The budget the dashboard is showing, or null when the user has none yet.
+     * The budget the dashboard is showing, or null when the user has none yet — including
+     * when the stored id points at a budget that has since been deleted.
      *
-     * Falls back to the first unarchived budget when the stored id points at a budget that
-     * has since been deleted, so a stale preference can never strand the user on an empty
-     * dashboard.
+     * [resolveActiveBudget] is the one that repairs a stale id by falling back to the first
+     * unarchived budget; this observer only reports what the stored id currently resolves to.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     fun observeActiveBudget(): Flow<Budget?> =

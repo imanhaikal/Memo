@@ -73,6 +73,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.imanhaikal.memo.R
+import com.imanhaikal.memo.ui.components.MemoChip
 import com.imanhaikal.memo.ui.components.MemoDialog
 import com.imanhaikal.memo.ui.components.PressScale
 import com.imanhaikal.memo.ui.components.iconRes
@@ -97,7 +98,6 @@ fun AddExpenseDialog(
     initialDescription: String? = null,
     initialDateMillis: Long? = null,
     initialDateHasTime: Boolean = true,
-    initialType: TransactionType = TransactionType.EXPENSE,
     // Disable for pre-filled flows (receipt scan) where a stray outside tap would discard data
     dismissOnClickOutside: Boolean = true,
     onConfirm: (TransactionDraft) -> Unit,
@@ -140,8 +140,8 @@ fun AddExpenseDialog(
                 !(transaction?.description?.ifBlank { null } ?: initialDescription).isNullOrBlank()
         )
     }
-    var type by rememberSaveable(transaction?.id, initialType) {
-        mutableStateOf(transaction?.type ?: initialType)
+    var type by rememberSaveable(transaction?.id) {
+        mutableStateOf(transaction?.type ?: TransactionType.EXPENSE)
     }
     val isIncome = type == TransactionType.INCOME
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
@@ -670,40 +670,19 @@ private fun CategoryChip(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val interaction = remember { MutableInteractionSource() }
-    // Cross-fade selection rather than hard-swapping the fill
-    val background by animateColorAsState(
-        targetValue = if (selected) AppColors.Yellow else AppColors.Field,
-        animationSpec = tween(durationMillis = 180),
-        label = "categoryChipBackground"
+    MemoChip(
+        label = category.label,
+        selected = selected,
+        onClick = onClick,
+        leadingIcon = { tint ->
+            Icon(
+                painter = painterResource(category.iconRes),
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(16.dp)
+            )
+        }
     )
-    val contentColor by animateColorAsState(
-        targetValue = if (selected) AppColors.OnYellow else AppColors.TextSecondary,
-        animationSpec = tween(durationMillis = 180),
-        label = "categoryChipContent"
-    )
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .springPress(interaction, pressedScale = PressScale.Surface)
-            .clip(RoundedCornerShape(50))
-            .background(background)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-    ) {
-        Icon(
-            painter = painterResource(category.iconRes),
-            contentDescription = null,
-            tint = contentColor,
-            modifier = Modifier.size(16.dp)
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = category.label,
-            style = MaterialTheme.typography.labelSmall,
-            color = contentColor
-        )
-    }
 }
 
 private fun toLocalDate(millis: Long): LocalDate =

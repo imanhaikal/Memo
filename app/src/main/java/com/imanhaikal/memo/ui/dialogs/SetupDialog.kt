@@ -1,21 +1,15 @@
 package com.imanhaikal.memo.ui.dialogs
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import com.imanhaikal.memo.ui.components.MemoInput
 import androidx.compose.runtime.Composable
@@ -27,17 +21,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import com.imanhaikal.memo.utils.rememberStrongHaptics
 import androidx.compose.ui.unit.dp
+import com.imanhaikal.memo.ui.components.CurrencyPicker
 import com.imanhaikal.memo.ui.components.MemoDialog
 import com.imanhaikal.memo.ui.components.springPress
 import com.imanhaikal.memo.ui.theme.AppColors
 import com.imanhaikal.memo.ui.theme.MemoTheme
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import com.imanhaikal.memo.utils.CurrencyUtils
 import com.imanhaikal.memo.utils.autoFocusOnceAttached
 import java.util.Currency
@@ -58,7 +52,6 @@ fun SetupDialog(
             ?: "MYR"
     }
     var selectedCurrency by rememberSaveable { mutableStateOf(defaultCurrency) }
-    var showCurrencyDropdown by rememberSaveable { mutableStateOf(false) }
     val amountCents = CurrencyUtils.parseAmountToCents(amountText)
     val days = daysText.toIntOrNull()
     val isValid = amountCents != null && days != null && days > 0
@@ -160,51 +153,14 @@ fun SetupDialog(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Currency Selector
-        Box(modifier = Modifier.fillMaxWidth()) {
-            OutlinedButton(
-                onClick = { showCurrencyDropdown = true },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = AppColors.TextPrimary,
-                    containerColor = AppColors.Field
-                ),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.Transparent)
-            ) {
-                Text(
-                    text = CurrencyUtils.SUPPORTED_CURRENCIES[selectedCurrency] ?: selectedCurrency,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier
-                        .padding(vertical = 8.dp)
-                        .fillMaxWidth(),
-                    textAlign = TextAlign.Start
-                )
-            }
-
-            DropdownMenu(
-                expanded = showCurrencyDropdown,
-                onDismissRequest = { showCurrencyDropdown = false },
-                modifier = Modifier.background(AppColors.Surface)
-            ) {
-                CurrencyUtils.SUPPORTED_CURRENCIES.forEach { (code, label) ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = label,
-                                color = if (code == selectedCurrency) AppColors.TextPrimary else AppColors.TextSecondary,
-                                fontWeight = if (code == selectedCurrency) FontWeight.Bold else FontWeight.Normal
-                            )
-                        },
-                        onClick = {
-                            haptic.tick()
-                            selectedCurrency = code
-                            showCurrencyDropdown = false
-                        }
-                    )
-                }
-            }
-        }
+        // Currency Selector — Field fill so it matches the MemoInputs above it
+        CurrencyPicker(
+            selectedCurrency = selectedCurrency,
+            onCurrencySelected = { selectedCurrency = it },
+            modifier = Modifier.fillMaxWidth(),
+            containerColor = AppColors.Field,
+            borderColor = Color.Transparent
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
 

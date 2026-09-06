@@ -116,8 +116,6 @@ class BudgetCalculatorUseCaseTest {
         // Net spend today is 4_000 against a 50_000 baseline over 2 days.
         assertEquals(4_000L, state.spentToday)
         assertEquals(46_000L, state.availableToday)
-        assertEquals(6_000L, state.expenseThisCycle)
-        assertEquals(2_000L, state.incomeThisCycle)
     }
 
     @Test

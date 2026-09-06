@@ -17,7 +17,6 @@ data class MemoPalette(
     val textSecondary: Color,
     val textTertiary: Color,
     val yellow: Color,
-    val yellowDark: Color,
     /** Content on top of a yellow container — dark in both themes. */
     val onYellow: Color,
     val green: Color,
@@ -40,7 +39,6 @@ val LightPalette = MemoPalette(
     textSecondary = Color(0xFF666666),
     textTertiary = Color(0xFF707070),
     yellow = Color(0xFFF2E057),
-    yellowDark = Color(0xFFE6D346),
     onYellow = Color(0xFF111111),
     green = Color(0xFF007A38),
     greenSubtle = Color(0xFFE3FCEF),
@@ -61,7 +59,6 @@ val DarkPalette = MemoPalette(
     textSecondary = Color(0xFFAAAAAA),
     textTertiary = Color(0xFF8F8F8F),
     yellow = Color(0xFFF2E057),
-    yellowDark = Color(0xFFE6D346),
     onYellow = Color(0xFF111111),
     green = Color(0xFF53D28A),
     greenSubtle = Color(0xFF12301F),
@@ -90,7 +87,6 @@ object AppColors {
     val TextSecondary: Color get() = palette.textSecondary
     val TextTertiary: Color get() = palette.textTertiary
     val Yellow: Color get() = palette.yellow
-    val YellowDark: Color get() = palette.yellowDark
     val OnYellow: Color get() = palette.onYellow
     val Green: Color get() = palette.green
     val GreenSubtle: Color get() = palette.greenSubtle

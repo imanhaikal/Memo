@@ -138,8 +138,7 @@ class BackupRepository(
         return ImportResult.Success(
             budgets = backup.budgets.size,
             transactions = backup.transactions.size,
-            skipped = 0,
-            mode = ImportMode.REPLACE
+            skipped = 0
         )
     }
 
@@ -226,8 +225,7 @@ class BackupRepository(
         return ImportResult.Success(
             budgets = importedBudgets,
             transactions = importedTransactions,
-            skipped = skipped,
-            mode = ImportMode.MERGE
+            skipped = skipped
         )
     }
 

@@ -44,15 +44,6 @@ class FakeTransactionDao(initial: List<Transaction> = emptyList()) : Transaction
     override fun observeForBudget(budgetId: Long): Flow<List<Transaction>> =
         rows.map { list -> list.filter { it.budgetId == budgetId }.sortedByDescending { it.date } }
 
-    override fun observeForCycle(
-        budgetId: Long,
-        startMillis: Long,
-        endMillisExclusive: Long
-    ): Flow<List<Transaction>> = rows.map { list ->
-        list.filter { it.budgetId == budgetId && it.date >= startMillis && it.date < endMillisExclusive }
-            .sortedByDescending { it.date }
-    }
-
     override suspend fun getForCycle(
         budgetId: Long,
         startMillis: Long,
@@ -91,11 +82,7 @@ class FakeTransactionDao(initial: List<Transaction> = emptyList()) : Transaction
         budgetId: Long,
         query: String,
         categoryId: String?,
-        type: String?,
-        minCents: Long?,
-        maxCents: Long?,
-        fromMillis: Long?,
-        toMillis: Long?
+        type: String?
     ): Flow<List<Transaction>> = rows.map { list ->
         list.filter { row ->
             row.budgetId == budgetId &&
@@ -103,11 +90,7 @@ class FakeTransactionDao(initial: List<Transaction> = emptyList()) : Transaction
                     row.note.contains(query, ignoreCase = true) ||
                     row.description.contains(query, ignoreCase = true)) &&
                 (categoryId == null || row.category?.id == categoryId) &&
-                (type == null || row.type.id == type) &&
-                (minCents == null || row.amount >= minCents) &&
-                (maxCents == null || row.amount <= maxCents) &&
-                (fromMillis == null || row.date >= fromMillis) &&
-                (toMillis == null || row.date < toMillis)
+                (type == null || row.type.id == type)
         }.sortedByDescending { it.date }
     }
 
@@ -187,9 +170,6 @@ class FakeBudgetCycleDao(
 
     override suspend fun getOpenCycle(budgetId: Long): BudgetCycle? =
         rows.value.firstOrNull { it.budgetId == budgetId && it.closedAt == null }
-
-    override suspend fun getLatest(budgetId: Long): BudgetCycle? =
-        rows.value.filter { it.budgetId == budgetId }.maxByOrNull { it.cycleIndex }
 
     override suspend fun getByIndex(budgetId: Long, cycleIndex: Int): BudgetCycle? =
         rows.value.firstOrNull { it.budgetId == budgetId && it.cycleIndex == cycleIndex }

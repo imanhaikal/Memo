@@ -31,7 +31,7 @@ class RecurringPostWorker(
                     applicationContext,
                     NotificationContent.recurringPosted(
                         count = posted.size,
-                        totalCents = posted.sumOf { it.transaction.amount },
+                        totalCents = posted.sumOf { it.amount },
                         currencyCode = budget?.currencyCode ?: "MYR"
                     )
                 )
