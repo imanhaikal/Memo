@@ -162,4 +162,35 @@ class CrudIntegrationTest {
         composeTestRule.onNodeWithText(note).performScrollTo().assertIsDisplayed()
     }
 
+    @Test
+    fun attachReceiptAffordanceIsOfferedInTheDetailsSection() {
+        val note = "Attach affordance"
+        viewModel.addTransaction(1_500L, note)
+        composeTestRule.waitUntil {
+            transactionDao.getTransactionsBlocking().any { it.note == note }
+        }
+        composeTestRule.onNodeWithText(note).performScrollTo().performClick()
+
+        // It lives behind the details toggle deliberately: most entries are a number and
+        // a note, and a photo affordance in that path would slow the common case.
+        composeTestRule.onNodeWithText("Add details").performScrollTo().performClick()
+
+        composeTestRule.onNodeWithText("Attach receipt").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun aRowWithAReceiptIsMarkedInTheList() {
+        val note = "Has a receipt"
+        viewModel.addTransaction(
+            amountCents = 2_500L,
+            note = note,
+            receiptFileName = "1f7b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d.jpg"
+        )
+        composeTestRule.waitUntil {
+            transactionDao.getTransactionsBlocking().any { it.note == note }
+        }
+        composeTestRule.onNodeWithText(note).performScrollTo().assertIsDisplayed()
+
+        composeTestRule.onNodeWithContentDescription("Has receipt").assertIsDisplayed()
+    }
 }

@@ -76,6 +76,19 @@ interface TransactionDao {
         type: String?
     ): Flow<List<Transaction>>
 
+    /**
+     * Every receipt image still referenced by a row — the keep-list for the orphan sweep.
+     *
+     * Files outlive rows on purpose: deleting an image the moment its row goes would break
+     * the snackbar's Undo, which restores the row verbatim.
+     */
+    @Query("SELECT receiptFileName FROM transactions WHERE receiptFileName IS NOT NULL")
+    suspend fun referencedReceiptFiles(): List<String>
+
+    /** Detaches every image without touching the entries themselves. */
+    @Query("UPDATE transactions SET receiptFileName = NULL WHERE receiptFileName IS NOT NULL")
+    suspend fun clearAllReceiptFiles()
+
     /** True when this rule already posted an occurrence covering [dayStart]..[dayEndExclusive]. */
     @Query(
         """

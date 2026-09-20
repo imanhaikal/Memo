@@ -153,6 +153,29 @@ class AppDatabaseMigrationTest {
     }
 
     @Test
+    fun migrate5To6LeavesExistingRowsWithNoReceipt() {
+        helper.createDatabase(TEST_DB, 5).use { database ->
+            database.execSQL(
+                "INSERT INTO transactions " +
+                    "(id, amount, note, date, category, description, hasTime, budgetId, type) " +
+                    "VALUES (1, 1234, 'Lunch', 1700000000000, 'food', 'Nasi lemak', 1, 1, 'expense')"
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 6, true, AppDatabase.MIGRATION_5_6).use { database ->
+            database.query(
+                "SELECT receiptFileName, amount, note FROM transactions WHERE id = 1"
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertTrue(cursor.isNull(0))
+                // The new column must not disturb what was already there.
+                assertEquals(1_234L, cursor.getLong(1))
+                assertEquals("Lunch", cursor.getString(2))
+            }
+        }
+    }
+
+    @Test
     fun migrateAllTheWayFrom1() {
         helper.createDatabase(TEST_DB, 1).use { database ->
             database.execSQL(
@@ -162,12 +185,13 @@ class AppDatabaseMigrationTest {
 
         helper.runMigrationsAndValidate(
             TEST_DB,
-            5,
+            6,
             true,
             AppDatabase.MIGRATION_1_2,
             AppDatabase.MIGRATION_2_3,
             AppDatabase.MIGRATION_3_4,
             AppDatabase.MIGRATION_4_5,
+            AppDatabase.MIGRATION_5_6,
         ).use { database ->
             database.assertMigratedAmount(1_234L)
         }

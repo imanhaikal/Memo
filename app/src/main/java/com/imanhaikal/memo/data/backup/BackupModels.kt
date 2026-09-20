@@ -68,7 +68,14 @@ data class BackupTransaction(
     val category: String? = null,
     val description: String = "",
     val hasTime: Boolean = true,
-    val recurringRuleId: Long? = null
+    val recurringRuleId: Long? = null,
+    /**
+     * Name of the receipt image, if any. The image itself is deliberately not embedded —
+     * base64 in JSON runs ~1.33x, so a couple of hundred receipts would turn a small
+     * readable file into a hundred-megabyte one parsed into memory in a single shot. A
+     * restore on another device keeps the entry and shows the image as missing.
+     */
+    val receiptFileName: String? = null
 )
 
 @Serializable

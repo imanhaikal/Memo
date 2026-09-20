@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CategoryCap::class,
         RecurringRule::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -181,10 +181,27 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Receipt images. Nullable with no default, so existing rows simply have nothing
+         * attached — the column holds a bare file name inside the receipt directory, never
+         * a path. See [Transaction.receiptFileName].
+         */
+        internal val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `transactions` ADD COLUMN `receiptFileName` TEXT")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return Instance ?: synchronized(this) {
                 Instance ?: Room.databaseBuilder(context, AppDatabase::class.java, "memo_database")
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(
+                        MIGRATION_1_2,
+                        MIGRATION_2_3,
+                        MIGRATION_3_4,
+                        MIGRATION_4_5,
+                        MIGRATION_5_6
+                    )
                     .build()
                     .also { Instance = it }
             }

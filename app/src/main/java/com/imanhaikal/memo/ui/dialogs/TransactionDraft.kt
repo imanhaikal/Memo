@@ -17,5 +17,11 @@ data class TransactionDraft(
     val hasTime: Boolean,
     val category: Category?,
     val description: String,
-    val type: TransactionType = TransactionType.EXPENSE
+    val type: TransactionType = TransactionType.EXPENSE,
+    /**
+     * The receipt image to file against this entry, already copied into internal storage
+     * by the time it gets here. Null means no image — which on an edit is how the user
+     * removes the one that was there.
+     */
+    val receiptFileName: String? = null
 )

@@ -57,13 +57,20 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Two-step pre-permission sheet: explains what scanning does before any camera or
+ * Two-step pre-permission sheet: explains what is about to happen before any camera or
  * picker launch. A bottom sheet rather than a centred dialog — it is an action sheet,
  * and this puts both options under the thumb.
+ *
+ * Parameterized rather than copied for the attach flow: the [isClosing] guard below is the
+ * kind of thing a second copy silently loses.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ScanReceiptChooserSheet(
+fun ReceiptSourceSheet(
+    title: String = "Scan Receipt",
+    message: String =
+        "Snap a photo of a receipt and the amount and note will be filled in for you. " +
+            "Photos you take are also saved to your gallery.",
     onCamera: () -> Unit,
     onGallery: () -> Unit,
     onDismiss: () -> Unit
@@ -97,7 +104,7 @@ fun ScanReceiptChooserSheet(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Scan Receipt",
+                text = title,
                 style = MaterialTheme.typography.titleMedium,
                 color = AppColors.TextPrimary
             )
@@ -105,7 +112,7 @@ fun ScanReceiptChooserSheet(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Snap a photo of a receipt and the amount and note will be filled in for you.",
+                text = message,
                 style = MaterialTheme.typography.bodyMedium,
                 color = AppColors.TextSecondary,
                 textAlign = TextAlign.Center

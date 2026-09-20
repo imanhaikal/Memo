@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <cache-path name="receipts" path="receipts/" />
+    <!--
+        Saved receipts, so the viewer's share action can hand one to another app. A distinct
+        name from the cache root above; only names the store itself generated are ever
+        resolved into a file (see ReceiptStore.isValidName).
+    -->
+    <files-path name="receipt_images" path="receipts/" />
 </paths>

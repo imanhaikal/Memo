@@ -8,13 +8,16 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -45,6 +48,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -59,6 +63,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
@@ -76,6 +81,8 @@ import com.imanhaikal.memo.R
 import com.imanhaikal.memo.ui.components.MemoChip
 import com.imanhaikal.memo.ui.components.MemoDialog
 import com.imanhaikal.memo.ui.components.PressScale
+import com.imanhaikal.memo.ui.components.ReceiptImageState
+import com.imanhaikal.memo.ui.components.rememberReceiptBitmap
 import com.imanhaikal.memo.ui.components.iconRes
 import com.imanhaikal.memo.ui.components.springPress
 import com.imanhaikal.memo.ui.theme.AppColors
@@ -83,6 +90,7 @@ import com.imanhaikal.memo.ui.theme.MemoTheme
 import com.imanhaikal.memo.utils.CurrencyUtils
 import com.imanhaikal.memo.utils.DateLabels
 import com.imanhaikal.memo.utils.autoFocusOnceAttached
+import java.io.File
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -100,6 +108,22 @@ fun AddExpenseDialog(
     initialDateHasTime: Boolean = true,
     // Disable for pre-filled flows (receipt scan) where a stray outside tap would discard data
     dismissOnClickOutside: Boolean = true,
+    /**
+     * The attachment currently staged for this entry, hoisted rather than owned here: the
+     * image is copied into internal storage the moment a picker returns, so by the time it
+     * reaches the dialog it is a plain file name that needs no `content://` grant to survive.
+     * The launchers that produce it have to be registered above this composable anyway.
+     */
+    receiptFileName: String? = null,
+    /**
+     * The file [receiptFileName] resolves to, or null when it isn't on this device — a
+     * routine case, since a restored backup carries rows but no images. Resolved by the
+     * caller so the existence check doesn't run on every recomposition.
+     */
+    receiptFile: File? = null,
+    onAttachReceipt: () -> Unit = {},
+    onViewReceipt: (String) -> Unit = {},
+    onRemoveReceipt: () -> Unit = {},
     onConfirm: (TransactionDraft) -> Unit,
     onDelete: (() -> Unit)? = null,
     onDismiss: () -> Unit
@@ -137,7 +161,8 @@ fun AddExpenseDialog(
     var detailsExpanded by rememberSaveable(transaction?.id, initialCategory, initialDescription) {
         mutableStateOf(
             (transaction?.category ?: initialCategory) != null ||
-                !(transaction?.description?.ifBlank { null } ?: initialDescription).isNullOrBlank()
+                !(transaction?.description?.ifBlank { null } ?: initialDescription).isNullOrBlank() ||
+                receiptFileName != null
         )
     }
     var type by rememberSaveable(transaction?.id) {
@@ -173,7 +198,8 @@ fun AddExpenseDialog(
                             // Income has no expense category to file it under
                             category = if (isIncome) null else selectedCategory,
                             description = descriptionText.trim(),
-                            type = type
+                            type = type,
+                            receiptFileName = receiptFileName
                         )
                     )
                 }
@@ -301,7 +327,9 @@ fun AddExpenseDialog(
 
         DetailsToggle(
             expanded = detailsExpanded,
-            hasDetails = (!isIncome && selectedCategory != null) || descriptionText.isNotBlank(),
+            hasDetails = (!isIncome && selectedCategory != null) ||
+                descriptionText.isNotBlank() ||
+                receiptFileName != null,
             onClick = {
                 haptic.tick()
                 if (detailsExpanded) focusManager.clearFocus()
@@ -361,6 +389,22 @@ fun AddExpenseDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 96.dp, max = 160.dp)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                ReceiptAttachmentRow(
+                    receiptFileName = receiptFileName,
+                    receiptFile = receiptFile,
+                    onAttach = {
+                        haptic.tick()
+                        onAttachReceipt()
+                    },
+                    onView = onViewReceipt,
+                    onRemove = {
+                        haptic.tick()
+                        onRemoveReceipt()
+                    }
                 )
             }
         }
@@ -625,6 +669,123 @@ private fun DateChip(
         )
     }
 }
+
+/**
+ * Attach / preview / remove for this entry's receipt image.
+ *
+ * Deliberately inside the details section rather than beside the amount: most entries are a
+ * number and a note typed in a few seconds, and putting a photo affordance in that path
+ * would slow down the common case to serve the rare one.
+ */
+@Composable
+private fun ReceiptAttachmentRow(
+    receiptFileName: String?,
+    receiptFile: File?,
+    onAttach: () -> Unit,
+    onView: (String) -> Unit,
+    onRemove: () -> Unit
+) {
+    if (receiptFileName == null) {
+        val interaction = remember { MutableInteractionSource() }
+        OutlinedButton(
+            onClick = onAttach,
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = AppColors.TextSecondary),
+            border = androidx.compose.foundation.BorderStroke(1.dp, AppColors.Border),
+            interactionSource = interaction,
+            modifier = Modifier
+                .springPress(interaction)
+                .fillMaxWidth()
+                .height(48.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_receipt),
+                contentDescription = null,
+                tint = AppColors.TextSecondary,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(text = "Attach receipt", style = MaterialTheme.typography.labelSmall)
+        }
+        return
+    }
+
+    val shape = RoundedCornerShape(12.dp)
+    val previewInteraction = remember { MutableInteractionSource() }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .springPress(previewInteraction, pressedScale = PressScale.Surface)
+                .clickable(interactionSource = previewInteraction, indication = null) {
+                    onView(receiptFileName)
+                }
+                .size(88.dp)
+                .clip(shape)
+                .background(AppColors.Background)
+                .border(1.dp, AppColors.Border, shape),
+            contentAlignment = Alignment.Center
+        ) {
+            val state by rememberReceiptBitmap(file = receiptFile, maxDimension = PREVIEW_PX)
+            when (val current = state) {
+                is ReceiptImageState.Loaded -> Image(
+                    bitmap = current.bitmap,
+                    contentDescription = "Receipt",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                // Both render the same quiet glyph: a receipt that has not finished
+                // decoding and one that isn't on this device should not make the dialog
+                // jump, and the viewer explains the difference when it matters.
+                ReceiptImageState.Loading, ReceiptImageState.Missing -> Icon(
+                    painter = painterResource(R.drawable.ic_receipt),
+                    contentDescription = null,
+                    tint = AppColors.TextTertiary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Receipt attached",
+                style = MaterialTheme.typography.labelSmall,
+                color = AppColors.TextPrimary
+            )
+            Text(
+                text = "Tap to view",
+                style = MaterialTheme.typography.labelSmall,
+                color = AppColors.TextTertiary
+            )
+        }
+
+        val removeInteraction = remember { MutableInteractionSource() }
+        Box(
+            modifier = Modifier
+                .springPress(removeInteraction)
+                .clickable(interactionSource = removeInteraction, indication = null, onClick = onRemove)
+                .size(36.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Remove receipt",
+                tint = AppColors.TextSecondary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+/**
+ * The preview is 88dp, so decoding much past this is paid-for detail nobody sees. The
+ * viewer asks for its own, larger decode.
+ */
+private const val PREVIEW_PX = 320
 
 @Composable
 private fun DetailsToggle(

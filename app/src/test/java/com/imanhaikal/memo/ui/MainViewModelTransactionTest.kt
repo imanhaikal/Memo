@@ -141,4 +141,68 @@ class MainViewModelTransactionTest {
 
         assertTrue(harness.transactionDao.rows.value.isEmpty())
     }
+
+    // ---- Receipt images --------------------------------------------------------------
+
+    @Test
+    fun `an attached receipt is stored on the row`() = runTest(testDispatcher.scheduler) {
+        seed()
+
+        viewModel.addTransaction(1250L, "Lunch", receiptFileName = RECEIPT)
+        advanceUntilIdle()
+
+        assertEquals(RECEIPT, inserted.receiptFileName)
+    }
+
+    @Test
+    fun `an entry added without a receipt has none`() = runTest(testDispatcher.scheduler) {
+        seed()
+
+        viewModel.addTransaction(1250L, "Lunch")
+        advanceUntilIdle()
+
+        assertNull(inserted.receiptFileName)
+    }
+
+    @Test
+    fun `undoing a delete brings the receipt back with the row`() =
+        runTest(testDispatcher.scheduler) {
+            seed()
+            viewModel.addTransaction(1250L, "Lunch", receiptFileName = RECEIPT)
+            advanceUntilIdle()
+            val original = inserted
+
+            viewModel.deleteTransaction(original)
+            advanceUntilIdle()
+            assertTrue(harness.transactionDao.rows.value.isEmpty())
+
+            viewModel.restoreTransaction(original)
+            advanceUntilIdle()
+
+            // The regression guard for eager file deletion: Undo restores the row verbatim,
+            // so the image it points at has to have outlived the delete.
+            assertEquals(RECEIPT, inserted.receiptFileName)
+        }
+
+    @Test
+    fun `deleting all receipts detaches every row without touching the entries`() =
+        runTest(testDispatcher.scheduler) {
+            seed()
+            viewModel.addTransaction(1250L, "Lunch", receiptFileName = RECEIPT)
+            viewModel.addTransaction(500L, "Bus", receiptFileName = OTHER_RECEIPT)
+            advanceUntilIdle()
+
+            viewModel.deleteAllReceipts()
+            advanceUntilIdle()
+
+            val rows = harness.transactionDao.rows.value
+            assertEquals(2, rows.size)
+            assertTrue(rows.all { it.receiptFileName == null })
+            assertEquals(setOf("Lunch", "Bus"), rows.map { it.note }.toSet())
+        }
+
+    private companion object {
+        const val RECEIPT = "1f7b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d.jpg"
+        const val OTHER_RECEIPT = "2a8c3d4e-5f6a-7b8c-9d0e-1f2a3b4c5d6e.jpg"
+    }
 }

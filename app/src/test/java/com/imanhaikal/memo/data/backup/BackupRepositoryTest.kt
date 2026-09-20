@@ -8,6 +8,7 @@ import com.imanhaikal.memo.data.CategoryCap
 import com.imanhaikal.memo.data.RecurringRule
 import com.imanhaikal.memo.data.Transaction
 import com.imanhaikal.memo.data.TransactionType
+import com.imanhaikal.memo.data.receipt.ReceiptStore
 import com.imanhaikal.memo.testing.FakeActiveBudgetStore
 import com.imanhaikal.memo.testing.FakeBudgetCycleDao
 import com.imanhaikal.memo.testing.FakeBudgetDao
@@ -17,10 +18,13 @@ import com.imanhaikal.memo.testing.FakeTransactionDao
 import com.imanhaikal.memo.testing.ImmediateTransactionRunner
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.nio.file.Files
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
@@ -29,7 +33,7 @@ class BackupRepositoryTest {
 
     private val clock: Clock = Clock.fixed(Instant.parse("2024-06-01T10:00:00Z"), ZoneId.of("UTC"))
 
-    private class Fixture(clock: Clock) {
+    private class Fixture(clock: Clock, isValidReceiptName: (String) -> Boolean = { true }) {
         val transactionDao = FakeTransactionDao()
         val budgetDao = FakeBudgetDao()
         val cycleDao = FakeBudgetCycleDao(transactionDao)
@@ -45,7 +49,8 @@ class BackupRepositoryTest {
             recurringRuleDao = ruleDao,
             transactionDao = transactionDao,
             activeBudgetStore = activeBudgetStore,
-            clock = clock
+            clock = clock,
+            isValidReceiptName = isValidReceiptName
         )
     }
 
@@ -389,5 +394,122 @@ class BackupRepositoryTest {
         target.repository.import(source.repository.export(), ImportMode.REPLACE)
 
         assertEquals(2L, target.activeBudgetStore.state.value)
+    }
+
+    // ---- Receipt images --------------------------------------------------------------
+
+    @Test
+    fun `a receipt file name survives the round trip when the image is still here`() = runTest {
+        val source = Fixture(clock).apply {
+            seed()
+            transactionDao.insertTransaction(
+                Transaction(
+                    id = 0,
+                    budgetId = 1L,
+                    amount = 1_250L,
+                    note = "Lunch",
+                    date = 1_717_200_000_000L,
+                    receiptFileName = RECEIPT
+                )
+            )
+        }
+        val target = Fixture(clock)
+
+        target.repository.import(source.repository.export(), ImportMode.REPLACE)
+
+        assertEquals(
+            RECEIPT,
+            target.transactionDao.rows.value.single { it.note == "Lunch" }.receiptFileName
+        )
+    }
+
+    @Test
+    fun `a receipt whose image is not on this device keeps its name`() = runTest {
+        val source = Fixture(clock).apply {
+            seed()
+            transactionDao.insertTransaction(
+                Transaction(
+                    id = 0,
+                    budgetId = 1L,
+                    amount = 1_250L,
+                    note = "Lunch",
+                    date = 1_717_200_000_000L,
+                    receiptFileName = RECEIPT
+                )
+            )
+        }
+        // The normal case on a restore: backups carry rows but no image bytes, so the
+        // target's receipt directory is empty. The name survives and the UI shows the
+        // missing-receipt placeholder rather than forgetting there ever was one.
+        val emptyStore = receiptStore()
+        val target = Fixture(clock, isValidReceiptName = emptyStore::isValidName)
+
+        target.repository.import(source.repository.export(), ImportMode.REPLACE)
+
+        val restored = target.transactionDao.rows.value.single { it.note == "Lunch" }
+        assertEquals(RECEIPT, restored.receiptFileName)
+        assertFalse(emptyStore.fileFor(RECEIPT)!!.exists())
+        assertEquals(1_250L, restored.amount)
+    }
+
+    @Test
+    fun `a hand-edited path in a backup file never reaches the database`() = runTest {
+        val target = Fixture(clock, isValidReceiptName = receiptStore()::isValidName)
+        val hostile = """
+            {
+              "format": "memo-budget-backup",
+              "schemaVersion": 1,
+              "exportedAtMillis": 1717200000000,
+              "budgets": [{
+                "id": 1, "name": "Monthly", "amountCents": 300000, "totalDays": 30,
+                "currencyCode": "MYR", "firstCycleStartDate": 19700, "createdAt": 1700000000000
+              }],
+              "transactions": [{
+                "id": 1, "budgetId": 1, "amount": 1250, "type": "expense",
+                "note": "Lunch", "date": 1717200000000,
+                "receiptFileName": "../databases/memo_database"
+              }]
+            }
+        """.trimIndent()
+
+        val result = target.repository.import(hostile, ImportMode.REPLACE)
+
+        assertTrue(result is ImportResult.Success)
+        assertNull(target.transactionDao.rows.value.single().receiptFileName)
+    }
+
+    @Test
+    fun `a backup written before receipts existed still imports`() = runTest {
+        val target = Fixture(clock)
+        val older = """
+            {
+              "format": "memo-budget-backup",
+              "schemaVersion": 1,
+              "exportedAtMillis": 1717200000000,
+              "budgets": [{
+                "id": 1, "name": "Monthly", "amountCents": 300000, "totalDays": 30,
+                "currencyCode": "MYR", "firstCycleStartDate": 19700, "createdAt": 1700000000000
+              }],
+              "transactions": [{
+                "id": 1, "budgetId": 1, "amount": 1250, "type": "expense",
+                "note": "Lunch", "date": 1717200000000
+              }]
+            }
+        """.trimIndent()
+
+        val result = target.repository.import(older, ImportMode.REPLACE)
+
+        assertTrue(result is ImportResult.Success)
+        assertNull(target.transactionDao.rows.value.single().receiptFileName)
+    }
+
+    /** A real store over an empty directory, so the production name rule is what's tested. */
+    private fun receiptStore() = ReceiptStore(
+        directory = Files.createTempDirectory("receipts").toFile(),
+        decode = { null }
+    )
+
+    private companion object {
+        const val RECEIPT = "1f7b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d.jpg"
     }
 }

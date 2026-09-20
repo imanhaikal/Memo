@@ -3,6 +3,7 @@ package com.imanhaikal.memo.testing
 import com.imanhaikal.memo.data.Budget
 import com.imanhaikal.memo.data.BudgetRepository
 import com.imanhaikal.memo.data.backup.BackupRepository
+import com.imanhaikal.memo.data.receipt.ReceiptStore
 import com.imanhaikal.memo.data.receipt.ScanOutcome
 import com.imanhaikal.memo.domain.BudgetCalculatorUseCase
 import com.imanhaikal.memo.domain.CycleMath
@@ -12,6 +13,8 @@ import com.imanhaikal.memo.domain.RecurringScheduleCalculator
 import com.imanhaikal.memo.ui.MainViewModel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import java.io.File
 import java.time.Clock
 import java.time.LocalDate
 
@@ -34,6 +37,22 @@ class MemoTestHarness(
     val activeBudgetStore = FakeActiveBudgetStore()
     val dayTicker = FakeDayTicker(today)
     val scanner = FakeReceiptScanner()
+
+    /**
+     * Points at a directory that is never created. Safe because [ReceiptStore] does no
+     * filesystem work until something actually asks it to read or write — otherwise every
+     * test that builds a harness would leave a stray directory behind.
+     *
+     * Runs unconfined rather than on [Dispatchers.IO]: the real dispatcher parks work on a
+     * pool the test scheduler cannot see, so `advanceUntilIdle` would return while a
+     * `stats()` call was still in flight and the continuation would resume after
+     * `Dispatchers.resetMain()` had already run.
+     */
+    val receiptStore = ReceiptStore(
+        directory = File(System.getProperty("java.io.tmpdir"), "memo-test-receipts-unused"),
+        decode = { null },
+        io = Dispatchers.Unconfined
+    )
 
     val cycleRollover = CycleRolloverUseCase(cycleDao, clock)
 
@@ -114,6 +133,7 @@ class MemoTestHarness(
         appearancePreferences = appearance,
         clock = clock,
         receiptScanner = scanner,
+        receiptStore = receiptStore,
         dayTicker = dayTicker,
         // Nothing to migrate in tests; already complete so uiState emits immediately.
         startupMigration = CompletableDeferred(Unit),

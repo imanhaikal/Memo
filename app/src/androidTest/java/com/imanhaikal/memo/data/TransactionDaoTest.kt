@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -87,5 +88,36 @@ class TransactionDaoTest {
         assertEquals("Newer", transactions[0].note)
         assertEquals("Now", transactions[1].note)
         assertEquals("Older", transactions[2].note)
+    }
+
+    @Test
+    fun referencedReceiptFilesReturnsOnlyAttachedImages() = runBlocking {
+        transactionDao.insertTransaction(
+            Transaction(amount = 1_000L, note = "With", date = 1L, receiptFileName = RECEIPT)
+        )
+        transactionDao.insertTransaction(
+            Transaction(amount = 2_000L, note = "Without", date = 2L)
+        )
+
+        // The sweep's keep-list: a null must never reach it, or every file looks referenced.
+        assertEquals(listOf(RECEIPT), transactionDao.referencedReceiptFiles())
+    }
+
+    @Test
+    fun clearAllReceiptFilesDetachesImagesButKeepsTheEntries() = runBlocking {
+        transactionDao.insertTransaction(
+            Transaction(amount = 1_000L, note = "Lunch", date = 1L, receiptFileName = RECEIPT)
+        )
+
+        transactionDao.clearAllReceiptFiles()
+
+        val row = transactionDao.getAll().single()
+        assertNull(row.receiptFileName)
+        assertEquals(1_000L, row.amount)
+        assertEquals("Lunch", row.note)
+    }
+
+    private companion object {
+        const val RECEIPT = "1f7b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d.jpg"
     }
 }

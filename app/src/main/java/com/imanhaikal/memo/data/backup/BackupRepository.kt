@@ -43,7 +43,22 @@ class BackupRepository(
     private val transactionDao: TransactionDao,
     private val activeBudgetStore: ActiveBudgetStore,
     private val clock: Clock,
-    private val appVersionCode: Int = 0
+    private val appVersionCode: Int = 0,
+    /**
+     * True when this receipt image is a name the store could have written.
+     *
+     * A lambda rather than the store itself, so this class stays pure DAO-plus-clock and
+     * testable off-device. This is not optional: a backup file is untrusted input the user
+     * picks through SAF from anywhere, and a hand-edited `"../databases/memo_database"`
+     * would otherwise be stored verbatim and later resolved into the database file by
+     * anything that shares a receipt.
+     *
+     * Deliberately *not* a check that the file exists. Backups carry no image bytes, so on a
+     * restore to another device none of them do — and dropping the name there would lose
+     * the fact that the entry had a receipt at all. A kept name whose file is absent renders
+     * the missing-receipt placeholder, and the user can remove it from the viewer.
+     */
+    private val isValidReceiptName: (String) -> Boolean = { true }
 ) {
 
     private val json = Json {
@@ -129,7 +144,7 @@ class BackupRepository(
             budgetCycleDao.insertAll(backup.cycles.map { it.toEntity() })
             categoryCapDao.insertAll(backup.categoryCaps.map { it.toEntity() })
             recurringRuleDao.insertAll(backup.recurringRules.map { it.toEntity() })
-            transactionDao.insertAll(backup.transactions.map { it.toEntity() })
+            transactionDao.insertAll(backup.transactions.map { it.toEntity(isValidReceiptName) })
         }
         backup.activeBudgetId
             ?.takeIf { id -> backup.budgets.any { it.id == id } }
@@ -204,7 +219,7 @@ class BackupRepository(
             val existingKeys = transactionDao.getAll().map { it.dedupeKey() }.toMutableSet()
             backup.transactions.forEach { incoming ->
                 val budgetId = budgetIdMap[incoming.budgetId] ?: return@forEach
-                val entity = incoming.toEntity().copy(
+                val entity = incoming.toEntity(isValidReceiptName).copy(
                     id = 0,
                     budgetId = budgetId,
                     // Rule ids come from the exporting device and mean nothing here.
@@ -306,10 +321,11 @@ private fun Transaction.toBackup() = BackupTransaction(
     category = category?.id,
     description = description,
     hasTime = hasTime,
-    recurringRuleId = recurringRuleId
+    recurringRuleId = recurringRuleId,
+    receiptFileName = receiptFileName
 )
 
-private fun BackupTransaction.toEntity() = Transaction(
+private fun BackupTransaction.toEntity(isValidReceiptName: (String) -> Boolean) = Transaction(
     id = id,
     budgetId = budgetId,
     amount = amount,
@@ -319,7 +335,10 @@ private fun BackupTransaction.toEntity() = Transaction(
     category = Category.fromId(category),
     description = description,
     hasTime = hasTime,
-    recurringRuleId = recurringRuleId
+    recurringRuleId = recurringRuleId,
+    // Dropped rather than kept dangling when the image isn't here — which is the normal
+    // case on a restore, since backups carry no image bytes.
+    receiptFileName = receiptFileName?.takeIf(isValidReceiptName)
 )
 
 private fun CategoryCap.toBackup() = BackupCategoryCap(

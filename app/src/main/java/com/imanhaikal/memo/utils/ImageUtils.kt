@@ -27,7 +27,26 @@ object ImageUtils {
         uri: Uri,
         maxDimension: Int = 1536,
         jpegQuality: Int = 80
-    ): String? {
+    ): String? = uriToScaledJpegBytes(contentResolver, uri, maxDimension, jpegQuality)
+        ?.let { Base64.encodeToString(it, Base64.NO_WRAP) }
+
+    /**
+     * The shared decode pipeline: two-pass decode, downscale to [maxDimension], EXIF
+     * rotation, JPEG re-encode. Returns null if the uri can't be read or isn't a decodable
+     * image.
+     *
+     * Two callers with different budgets: the Gemini upload takes the smaller default, and
+     * the stored receipt copy asks for more. Note that because the output is re-encoded
+     * from a [Bitmap] rather than copied, **no EXIF survives** — the GPS coordinates a
+     * camera stamps onto a photo never reach storage. That privacy property would be lost
+     * by "optimizing" this into a raw byte copy.
+     */
+    fun uriToScaledJpegBytes(
+        contentResolver: ContentResolver,
+        uri: Uri,
+        maxDimension: Int = 1536,
+        jpegQuality: Int = 80
+    ): ByteArray? {
         return try {
             // Pass 1: bounds only, to pick a power-of-two sample size.
             // decodeStream always returns null in bounds mode; success is
@@ -57,7 +76,7 @@ object ImageUtils {
             val output = ByteArrayOutputStream()
             bitmap.compress(Bitmap.CompressFormat.JPEG, jpegQuality, output)
             bitmap.recycle()
-            Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
+            output.toByteArray()
         } catch (e: IOException) {
             null
         } catch (e: SecurityException) {
@@ -73,11 +92,23 @@ object ImageUtils {
         return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     }
 
-    fun purgeReceiptCaptures(context: Context) {
-        File(context.cacheDir, RECEIPTS_DIR).listFiles()?.forEach { it.delete() }
+    /**
+     * Deletes camera captures last modified more than [olderThanMillis] ago; 0 clears them
+     * all. The in-app copy is made the moment the camera returns, so a capture is only ever
+     * needed for the few seconds after that.
+     */
+    fun purgeReceiptCaptures(context: Context, olderThanMillis: Long = 0) {
+        val cutoff = System.currentTimeMillis() - olderThanMillis
+        File(context.cacheDir, RECEIPTS_DIR).listFiles()
+            ?.filter { olderThanMillis <= 0 || it.lastModified() < cutoff }
+            ?.forEach { it.delete() }
     }
 
-    private fun calculateInSampleSize(width: Int, height: Int, maxDimension: Int): Int {
+    /** How long a startup purge leaves a capture alone; see [purgeReceiptCaptures]. */
+    const val CAPTURE_GRACE_MS = 60 * 60 * 1000L
+
+    /** Also used by the receipt preview, which decodes straight from a file. */
+    fun calculateInSampleSize(width: Int, height: Int, maxDimension: Int): Int {
         var sampleSize = 1
         // Keep the decoded bitmap within ~2x of the target so the exact scale
         // below stays cheap without visibly losing detail.

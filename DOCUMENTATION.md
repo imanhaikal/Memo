@@ -41,7 +41,7 @@ The application follows the **Google Guide to App Architecture**, utilizing the 
 ### 3.1 Transactions (Room Database)
 Stored in a local SQLite database accessed via Room.
 
-**Schema version 5.** Five entities: `transactions`, `budgets`, `budget_cycles`,
+**Schema version 6.** Five entities: `transactions`, `budgets`, `budget_cycles`,
 `category_caps` and `recurring_rules`.
 
 ```kotlin
@@ -56,7 +56,8 @@ data class Transaction(
     val hasTime: Boolean = true,
     val budgetId: Long = 1,         // Owning budget
     val type: TransactionType = EXPENSE,
-    val recurringRuleId: Long? = null
+    val recurringRuleId: Long? = null,
+    val receiptFileName: String? = null // File name only, inside ReceiptStore's directory
 )
 ```
 
@@ -88,7 +89,40 @@ Device-scoped settings only — budget values live in Room.
 Every `preferencesDataStore` delegate is declared in `data/MemoDataStore.kt` and nowhere
 else: two delegates with the same file name throw at runtime, not compile time.
 
-### 3.3 Upgrading from v4
+### 3.3 Receipt images
+Saved receipts live in `filesDir/receipts/<uuid>.jpg`, owned by `ReceiptStore`. Internal
+storage rather than the cache: the OS evicts cache under pressure, which would destroy data
+the user believes is saved. `transactions.receiptFileName` holds a **bare file name**, never
+a path — `ReceiptStore.isValidName` accepts only the UUID shape the store itself writes,
+because backup files are untrusted input and a `"../databases/memo_database"` would
+otherwise resolve to the database and be shareable.
+
+The image is copied in the moment a picker returns, not when the dialog is confirmed: a
+PhotoPicker grant dies with the process, and being killed while the camera app is
+foregrounded is routine, so a late copy loses the image exactly where it is most likely to
+be needed. Everything downstream carries a `String`, which survives process death without
+a grant.
+
+Files therefore outlive their rows, and that is deliberate — the snackbar's Undo restores a
+deleted row verbatim, so its image must still be there. Nothing deletes eagerly; a single
+`sweepOrphans` at startup diffs the directory against `referencedReceiptFiles()` and drops
+what nothing points at, skipping anything modified in the last 24h so an attachment sitting
+in an open dialog is never collected. Confirmed destructive actions on the Settings screen
+sweep with a zero grace instead, so the storage figure drops immediately.
+
+Photos taken with the in-app camera are also copied to the phone's gallery
+(Pictures/Memo) by `GalleryPublisher` — the camera's original file, full resolution with
+EXIF, unlike the downsized, EXIF-stripped in-app copy. Gallery picks are not copied back,
+which would duplicate them. The two copies are independent: removing a receipt in Memo
+leaves the gallery photo alone. Android 10+ writes through MediaStore with no permission;
+Android 8–9 asks for `WRITE_EXTERNAL_STORAGE` (capped at `maxSdkVersion` 28) at the moment
+of the first copy, and a refusal skips only the gallery copy, never the attachment.
+
+Backups record `receiptFileName` but carry no image bytes — base64 in JSON runs ~1.33x, and
+a couple of hundred receipts would turn a small readable file into a hundred-megabyte one.
+A restored entry whose image is absent renders a labelled placeholder.
+
+### 3.4 Upgrading from v4
 A Room migration runs on raw SQLite and cannot read DataStore, so the handoff is two-part.
 `MIGRATION_4_5` creates a placeholder budget row; `BudgetBootstrap` then fills it from the
 old DataStore values and backfills a cycle row per elapsed period. `uiState` awaits that

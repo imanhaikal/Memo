@@ -30,7 +30,16 @@ data class Transaction(
     @ColumnInfo(defaultValue = "expense")
     val type: TransactionType = TransactionType.EXPENSE,
     /** Set when this row was posted by a [RecurringRule], null when entered by hand. */
-    val recurringRuleId: Long? = null
+    val recurringRuleId: Long? = null,
+    /**
+     * File name — never a path, never a content:// uri — of this entry's receipt image
+     * inside the receipt store's directory. Null when nothing is attached, and also when
+     * the row came from a backup whose image isn't on this device.
+     *
+     * Deliberately not called `receiptPath`: the moment one row holds an absolute path,
+     * `File(dir, value)` reads outside the directory, and backup files are untrusted input.
+     */
+    val receiptFileName: String? = null
 ) {
     /** Signed contribution to spending: income gives money back to the pool. */
     val signedAmount: Long

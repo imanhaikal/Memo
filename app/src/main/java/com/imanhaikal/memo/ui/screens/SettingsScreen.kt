@@ -1,5 +1,6 @@
 package com.imanhaikal.memo.ui.screens
 
+import android.text.format.Formatter
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -43,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import com.imanhaikal.memo.data.receipt.ReceiptStorageStats
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -103,6 +105,9 @@ fun SettingsScreen(
     onSave: (Long, Int, String) -> Unit,
     onReset: () -> Unit,
     onMessage: (String) -> Unit,
+    receiptStorage: ReceiptStorageStats = ReceiptStorageStats.EMPTY,
+    onRefreshReceiptStorage: () -> Unit = {},
+    onDeleteAllReceipts: () -> Unit = {},
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp)
 ) {
@@ -115,6 +120,11 @@ fun SettingsScreen(
     var selectedCurrency by rememberSaveable(state.currencyCode) { mutableStateOf(state.currencyCode) }
     var showResetDialog by rememberSaveable { mutableStateOf(false) }
     var showClearDialog by rememberSaveable { mutableStateOf(false) }
+    var showDeleteReceiptsDialog by rememberSaveable { mutableStateOf(false) }
+
+    // Read on entry and after a delete. Watching the filesystem for a figure this
+    // incidental would cost more than it is worth.
+    LaunchedEffect(Unit) { onRefreshReceiptStorage() }
     var showCurrencyChangeDialog by rememberSaveable { mutableStateOf(false) }
     val haptic = rememberStrongHaptics()
     val context = LocalContext.current
@@ -600,6 +610,26 @@ fun SettingsScreen(
                 )
             }
 
+            // One line covers both questions people have here: what is this costing me,
+            // and is it in my backup? Saying it next to the export button is the honest
+            // place for the second half.
+            Text(
+                text = buildString {
+                    append("Receipts — ")
+                    if (receiptStorage.fileCount == 0) {
+                        append("no images saved yet.")
+                    } else {
+                        append(receiptStorage.fileCount)
+                        append(if (receiptStorage.fileCount == 1) " image, " else " images, ")
+                        append(Formatter.formatShortFileSize(context, receiptStorage.totalBytes))
+                        append('.')
+                    }
+                    append(" Backups don't include receipt images.")
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = AppColors.TextTertiary
+            )
+
             if (!scanAvailable) {
                 // Explain the missing scan FAB instead of leaving the feature invisible
                 Text(
@@ -645,6 +675,15 @@ fun SettingsScreen(
                     showResetDialog = true
                 }
             )
+            if (receiptStorage.fileCount > 0) {
+                DangerAction(
+                    label = "Delete all receipt images",
+                    onClick = {
+                        haptic.tick()
+                        showDeleteReceiptsDialog = true
+                    }
+                )
+            }
         }
     }
 
@@ -754,6 +793,40 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showClearDialog = false }) {
+                    Text("Cancel", color = AppColors.TextPrimary)
+                }
+            },
+            containerColor = AppColors.Surface,
+            titleContentColor = AppColors.TextPrimary,
+            textContentColor = AppColors.TextSecondary
+        )
+    }
+
+    if (showDeleteReceiptsDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteReceiptsDialog = false },
+            title = { Text(text = "Delete receipt images?") },
+            text = {
+                Text(
+                    text = "This permanently deletes all " +
+                        "${receiptStorage.fileCount} saved receipt images. Your expenses " +
+                        "themselves are kept. Because backups don't include images, this " +
+                        "can't be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        haptic.error()
+                        onDeleteAllReceipts()
+                        showDeleteReceiptsDialog = false
+                    }
+                ) {
+                    Text("Delete", color = AppColors.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteReceiptsDialog = false }) {
                     Text("Cancel", color = AppColors.TextPrimary)
                 }
             },

@@ -18,6 +18,9 @@ import com.imanhaikal.memo.data.backup.BackupRepository
 import com.imanhaikal.memo.data.receipt.GeminiReceiptScanner
 import com.imanhaikal.memo.data.receipt.GeminiReceiptService
 import com.imanhaikal.memo.data.receipt.ReceiptScanner
+import com.imanhaikal.memo.data.receipt.GalleryPublisher
+import com.imanhaikal.memo.data.receipt.ReceiptStore
+import com.imanhaikal.memo.utils.ImageUtils
 import com.imanhaikal.memo.domain.BudgetCalculatorUseCase
 import com.imanhaikal.memo.domain.BudgetSummaryProvider
 import com.imanhaikal.memo.domain.CycleRolloverUseCase
@@ -36,6 +39,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import java.io.File
 import java.time.Clock
 
 class MemoApplication : Application() {
@@ -83,6 +87,25 @@ class MemoApplication : Application() {
                     clock = container.clock
                 )
             }
+            // Last, so it never delays recurring posting. Receipt files outlive their rows
+            // on purpose — deleting one the moment its row goes would break the snackbar's
+            // Undo, and five separate call sites would each have to remember. One sweep
+            // here replaces all of them.
+            runCatching {
+                container.receiptStore.sweepOrphans(
+                    referenced = container.transactionDao.referencedReceiptFiles().toSet(),
+                    graceMillis = ReceiptStore.ORPHAN_GRACE_MS
+                )
+            }
+            // The scan FAB clears camera captures, but the attach flow never passes through
+            // it. Aged, because being killed while the camera app is up is routine and the
+            // restored launcher callback still has to copy the capture it just took.
+            runCatching {
+                ImageUtils.purgeReceiptCaptures(
+                    context = this@MemoApplication,
+                    olderThanMillis = ImageUtils.CAPTURE_GRACE_MS
+                )
+            }
         }
     }
 }
@@ -99,6 +122,8 @@ interface AppContainer {
     val budgetPreferences: BudgetPreferences
     val clock: Clock
     val receiptScanner: ReceiptScanner
+    val receiptStore: ReceiptStore
+    val galleryPublisher: GalleryPublisher
     val dayTicker: DayTicker
     val applicationScope: CoroutineScope
 
@@ -167,7 +192,8 @@ class DefaultAppContainer(private val context: Application) : AppContainer {
             transactionDao = transactionDao,
             activeBudgetStore = budgetPreferences,
             clock = clock,
-            appVersionCode = BuildConfig.VERSION_CODE
+            appVersionCode = BuildConfig.VERSION_CODE,
+            isValidReceiptName = { name -> receiptStore.isValidName(name) }
         )
     }
 
@@ -217,6 +243,24 @@ class DefaultAppContainer(private val context: Application) : AppContainer {
         GeminiReceiptScanner(
             contentResolver = context.contentResolver,
             service = GeminiReceiptService(apiKey = BuildConfig.GEMINI_API_KEY, clock = clock)
+        )
+    }
+
+    override val galleryPublisher: GalleryPublisher by lazy {
+        GalleryPublisher(context.contentResolver)
+    }
+
+    override val receiptStore: ReceiptStore by lazy {
+        ReceiptStore(
+            directory = File(context.filesDir, "receipts"),
+            decode = { uri ->
+                ImageUtils.uriToScaledJpegBytes(
+                    contentResolver = context.contentResolver,
+                    uri = uri,
+                    maxDimension = ReceiptStore.MAX_DIMENSION,
+                    jpegQuality = ReceiptStore.JPEG_QUALITY
+                )
+            }
         )
     }
 }

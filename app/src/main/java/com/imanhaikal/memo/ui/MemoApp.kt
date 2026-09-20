@@ -1,7 +1,13 @@
 package com.imanhaikal.memo.ui
 
 import android.content.ActivityNotFoundException
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import com.imanhaikal.memo.data.receipt.GalleryPublisher
 import android.net.Uri
+import androidx.core.content.FileProvider
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -38,8 +44,9 @@ import com.imanhaikal.memo.ui.components.DashboardSkeleton
 import com.imanhaikal.memo.ui.components.MemoFab
 import com.imanhaikal.memo.ui.components.MemoScanFab
 import com.imanhaikal.memo.ui.dialogs.AddExpenseDialog
+import com.imanhaikal.memo.ui.dialogs.ReceiptSourceSheet
+import com.imanhaikal.memo.ui.dialogs.ReceiptViewerDialog
 import com.imanhaikal.memo.ui.dialogs.ScanErrorDialog
-import com.imanhaikal.memo.ui.dialogs.ScanReceiptChooserSheet
 import com.imanhaikal.memo.ui.dialogs.ScanningReceiptDialog
 import com.imanhaikal.memo.ui.dialogs.SetupDialog
 import com.imanhaikal.memo.ui.navigation.MemoNavHost
@@ -80,6 +87,7 @@ fun MemoApp(
     val notificationSettings by viewModel.notificationSettings.collectAsStateWithLifecycle()
     val searchCriteria by viewModel.searchCriteria.collectAsStateWithLifecycle()
     val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
+    val receiptStorage by viewModel.receiptStorage.collectAsStateWithLifecycle()
 
     // Wraps everything below, so every rememberStrongHaptics() in the tree — including
     // the one this function uses for Undo — sees the user's preference
@@ -89,6 +97,15 @@ fun MemoApp(
     var showScanChooser by rememberSaveable { mutableStateOf(false) }
     // Uri kept as String so it survives process death while the camera app is open
     var cameraImageUriString by rememberSaveable { mutableStateOf<String?>(null) }
+    // A stored file name, never a Uri: the image is copied into internal storage the moment
+    // the picker returns, so this survives process death without a content:// grant — which
+    // is exactly what the camera flow above cannot rely on.
+    var pendingReceiptFileName by rememberSaveable { mutableStateOf<String?>(null) }
+    var showAttachChooser by rememberSaveable { mutableStateOf(false) }
+    var viewerFileName by rememberSaveable { mutableStateOf<String?>(null) }
+    // Which flow the next picker result belongs to. A Boolean rather than an enum so
+    // rememberSaveable needs no custom Saver.
+    var pickForAttach by rememberSaveable { mutableStateOf(false) }
     val backStack = rememberMemoBackStack()
     val transactionToEdit = remember(transactionToEditId, state.transactions) {
         state.transactions.firstOrNull { it.id == transactionToEditId }
@@ -103,6 +120,7 @@ fun MemoApp(
     LaunchedEffect(quickAdd, state.isSetup) {
         if (quickAdd && state.isSetup) {
             transactionToEditId = null
+            pendingReceiptFileName = null
             showAddExpenseDialog = true
             quickAddRequests.value = false
         }
@@ -138,16 +156,129 @@ fun MemoApp(
             }
         }
     }
+    // Copy into internal storage first, always, and only then scan. The read grant on a
+    // picker uri lasts no longer than the process, and being killed while the camera app is
+    // foregrounded is routine — deferring the copy to the moment the user taps Add would
+    // lose the image silently on exactly that path.
+    val keepReceipt: (Uri) -> Unit = { uri ->
+        viewModel.saveReceiptImage(uri) { fileName ->
+            // Only overwrite on success. Clearing here would mean a failed *replace* on an
+            // entry that already had a receipt silently dropped the one it had — the user
+            // asked for a different image, not for no image.
+            if (fileName == null) {
+                showMessage("Couldn't save that image")
+            } else {
+                pendingReceiptFileName = fileName
+            }
+        }
+    }
+    val galleryCopy: (Uri) -> Unit = { uri ->
+        viewModel.copyCaptureToGallery(uri) { copied ->
+            // Quiet on success — the photo simply shows up in the gallery. A failure is
+            // worth a word, since the user may be counting on that copy.
+            if (!copied) showMessage("Couldn't save a copy to your gallery")
+        }
+    }
+    // Android 8-9 only: shared storage needs a runtime grant there. The capture waits here
+    // as a string while the permission dialog is up, like cameraImageUriString above.
+    var galleryCopyAwaitingPermission by rememberSaveable { mutableStateOf<String?>(null) }
+    val storagePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val uri = galleryCopyAwaitingPermission?.let(Uri::parse)
+        galleryCopyAwaitingPermission = null
+        if (uri == null) return@rememberLauncherForActivityResult
+        if (granted) {
+            galleryCopy(uri)
+        } else {
+            // The receipt itself is already saved in the app; only the extra copy is skipped.
+            showMessage("Receipt saved in Memo, but not to your gallery")
+        }
+    }
+    val copyCaptureToGallery: (Uri) -> Unit = { uri ->
+        val needsGrant = GalleryPublisher.needsStoragePermission &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) != PackageManager.PERMISSION_GRANTED
+        if (needsGrant) {
+            galleryCopyAwaitingPermission = uri.toString()
+            storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else {
+            galleryCopy(uri)
+        }
+    }
     val galleryLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri ->
-        uri?.let(viewModel::scanReceipt)
+        // Consumed here, on every result including a cancel, so the flag can never outlive
+        // the pick it was set for.
+        val forAttach = pickForAttach
+        pickForAttach = false
+        if (uri != null) {
+            keepReceipt(uri)
+            if (!forAttach) viewModel.scanReceipt(uri)
+        }
     }
     val cameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { success ->
+        val forAttach = pickForAttach
+        pickForAttach = false
         val uri = cameraImageUriString?.let(Uri::parse)
-        if (success && uri != null) viewModel.scanReceipt(uri)
+        if (success && uri != null) {
+            keepReceipt(uri)
+            // Camera captures only. A gallery pick is already in the gallery, and copying it
+            // back would duplicate every receipt the user chose from there.
+            copyCaptureToGallery(uri)
+            if (!forAttach) viewModel.scanReceipt(uri)
+        }
+    }
+    val launchCamera: () -> Unit = {
+        val uri = ImageUtils.createReceiptCaptureUri(context)
+        cameraImageUriString = uri.toString()
+        try {
+            cameraLauncher.launch(uri)
+        } catch (e: ActivityNotFoundException) {
+            // Devices without a camera app (some tablets/emulators)
+            showMessage("No camera app available — choose from gallery instead")
+        }
+    }
+    val launchGallery: () -> Unit = {
+        galleryLauncher.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+        )
+    }
+    val openViewer: (String) -> Unit = { viewerFileName = it }
+
+    // Resolved once per change rather than on every recomposition — it stats the file.
+    val pendingReceiptFile = remember(pendingReceiptFileName) {
+        pendingReceiptFileName?.let(viewModel::receiptFile)
+    }
+
+    val shareReceipt: (String) -> Unit = { fileName ->
+        val file = viewModel.receiptFile(fileName)
+        if (file == null) {
+            showMessage("That receipt image isn't on this device")
+        } else {
+            // Needs the <files-path> root in res/xml/file_paths.xml; FileProvider throws
+            // "Failed to find configured root" without it.
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "image/jpeg"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            try {
+                context.startActivity(Intent.createChooser(intent, "Share receipt"))
+            } catch (e: ActivityNotFoundException) {
+                showMessage("Nothing on this device can share an image")
+            }
+        }
     }
 
     Surface(
@@ -178,11 +309,14 @@ fun MemoApp(
                                 viewModel.viewModelScope.launch(Dispatchers.IO) {
                                     ImageUtils.purgeReceiptCaptures(context)
                                 }
+                                pickForAttach = false
+                                pendingReceiptFileName = null
                                 showScanChooser = true
                             })
                         }
                         MemoFab(onClick = {
                             transactionToEditId = null
+                            pendingReceiptFileName = null
                             showAddExpenseDialog = true
                         })
                     }
@@ -216,10 +350,12 @@ fun MemoApp(
                                 onOpenSearch = { backStack.push(Screen.Search) },
                                 onAddExpense = {
                                     transactionToEditId = null
+                                    pendingReceiptFileName = null
                                     showAddExpenseDialog = true
                                 },
                                 onEditTransaction = { transaction ->
                                     transactionToEditId = transaction.id
+                                    pendingReceiptFileName = transaction.receiptFileName
                                     showAddExpenseDialog = true
                                 },
                                 onDeleteTransaction = deleteWithUndo,
@@ -271,6 +407,9 @@ fun MemoApp(
                                     backStack.popToRoot()
                                 },
                                 onMessage = showMessage,
+                                receiptStorage = receiptStorage,
+                                onRefreshReceiptStorage = viewModel::refreshReceiptStorage,
+                                onDeleteAllReceipts = viewModel::deleteAllReceipts,
                                 contentPadding = innerPadding,
                                 modifier = screenModifier
                             )
@@ -316,6 +455,7 @@ fun MemoApp(
                                 onCriteriaChange = viewModel::updateSearch,
                                 onEditTransaction = { transaction ->
                                     transactionToEditId = transaction.id
+                                    pendingReceiptFileName = transaction.receiptFileName
                                     showAddExpenseDialog = true
                                 },
                                 onDeleteTransaction = deleteWithUndo,
@@ -342,6 +482,14 @@ fun MemoApp(
                 if (showAddExpenseDialog) {
                     AddExpenseDialog(
                         transaction = transactionToEdit,
+                        receiptFileName = pendingReceiptFileName,
+                        receiptFile = pendingReceiptFile,
+                        onAttachReceipt = {
+                            pickForAttach = true
+                            showAttachChooser = true
+                        },
+                        onViewReceipt = openViewer,
+                        onRemoveReceipt = { pendingReceiptFileName = null },
                         onConfirm = { draft ->
                             if (transactionToEdit != null) {
                                 viewModel.updateTransaction(
@@ -352,7 +500,8 @@ fun MemoApp(
                                         category = draft.category,
                                         description = draft.description,
                                         hasTime = draft.hasTime,
-                                        type = draft.type
+                                        type = draft.type,
+                                        receiptFileName = draft.receiptFileName
                                     )
                                 )
                             } else {
@@ -363,46 +512,78 @@ fun MemoApp(
                                     category = draft.category,
                                     description = draft.description,
                                     hasTime = draft.hasTime,
-                                    type = draft.type
+                                    type = draft.type,
+                                    receiptFileName = draft.receiptFileName
                                 )
                             }
                             showAddExpenseDialog = false
                             transactionToEditId = null
+                            pendingReceiptFileName = null
                         },
                         onDelete = if (transactionToEdit != null) {
                             {
                                 showAddExpenseDialog = false
                                 transactionToEditId = null
+                                pendingReceiptFileName = null
                                 deleteWithUndo(transactionToEdit)
                             }
                         } else null,
                         onDismiss = {
                             showAddExpenseDialog = false
                             transactionToEditId = null
+                            // Whatever was staged and not confirmed is now an orphan; the
+                            // startup sweep collects it. Deleting it here would be wrong —
+                            // on an edit it may be the image the row still points at.
+                            pendingReceiptFileName = null
                         }
                     )
                 }
 
                 if (showScanChooser) {
-                    ScanReceiptChooserSheet(
+                    ReceiptSourceSheet(
                         onCamera = {
                             showScanChooser = false
-                            val uri = ImageUtils.createReceiptCaptureUri(context)
-                            cameraImageUriString = uri.toString()
-                            try {
-                                cameraLauncher.launch(uri)
-                            } catch (e: ActivityNotFoundException) {
-                                // Devices without a camera app (some tablets/emulators)
-                                showMessage("No camera app available — choose from gallery instead")
-                            }
+                            launchCamera()
                         },
                         onGallery = {
                             showScanChooser = false
-                            galleryLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
+                            launchGallery()
                         },
                         onDismiss = { showScanChooser = false }
+                    )
+                }
+
+                if (showAttachChooser) {
+                    ReceiptSourceSheet(
+                        title = "Attach Receipt",
+                        message = "Keep a photo of the receipt with this entry. " +
+                            "Photos you take are also saved to your gallery.",
+                        onCamera = {
+                            showAttachChooser = false
+                            launchCamera()
+                        },
+                        onGallery = {
+                            showAttachChooser = false
+                            launchGallery()
+                        },
+                        onDismiss = {
+                            showAttachChooser = false
+                            pickForAttach = false
+                        }
+                    )
+                }
+
+                viewerFileName?.let { fileName ->
+                    ReceiptViewerDialog(
+                        file = viewModel.receiptFile(fileName),
+                        onShare = { shareReceipt(fileName) },
+                        // Only ever opened from the add/edit dialog, where removing is
+                        // staged rather than committed — the row is written on confirm.
+                        onDelete = {
+                            if (pendingReceiptFileName == fileName) pendingReceiptFileName = null
+                            viewerFileName = null
+                        },
+                        onDismiss = { viewerFileName = null }
                     )
                 }
 
@@ -411,6 +592,17 @@ fun MemoApp(
                         onCancel = { viewModel.cancelScan() }
                     )
                     is ScanState.Success -> AddExpenseDialog(
+                        // The scanned image is already saved, so it arrives pre-attached —
+                        // which is also how the user finds out it is being kept, and where
+                        // they remove it if they would rather it weren't.
+                        receiptFileName = pendingReceiptFileName,
+                        receiptFile = pendingReceiptFile,
+                        onAttachReceipt = {
+                            pickForAttach = true
+                            showAttachChooser = true
+                        },
+                        onViewReceipt = openViewer,
+                        onRemoveReceipt = { pendingReceiptFileName = null },
                         initialAmountCents = scan.amountCents,
                         initialNote = scan.note,
                         initialCategory = scan.category,
@@ -427,24 +619,36 @@ fun MemoApp(
                                 category = draft.category,
                                 description = draft.description,
                                 hasTime = draft.hasTime,
-                                type = draft.type
+                                type = draft.type,
+                                receiptFileName = draft.receiptFileName
                             )
                             viewModel.clearScanState()
+                            pendingReceiptFileName = null
                         },
-                        onDismiss = { viewModel.clearScanState() }
+                        onDismiss = {
+                            viewModel.clearScanState()
+                            pendingReceiptFileName = null
+                        }
                     )
                     is ScanState.Error -> ScanErrorDialog(
                         reason = scan.reason,
                         onRetry = {
                             viewModel.clearScanState()
+                            pendingReceiptFileName = null
                             showScanChooser = true
                         },
                         onManual = {
                             viewModel.clearScanState()
                             transactionToEditId = null
+                            // Deliberately kept: the scan failed to read the receipt, but
+                            // the photo saved fine and is worth attaching to the entry the
+                            // user is about to type by hand.
                             showAddExpenseDialog = true
                         },
-                        onDismiss = { viewModel.clearScanState() }
+                        onDismiss = {
+                            viewModel.clearScanState()
+                            pendingReceiptFileName = null
+                        }
                     )
                     is ScanState.Idle -> Unit
                 }

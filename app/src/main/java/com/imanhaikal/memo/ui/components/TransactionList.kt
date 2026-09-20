@@ -19,6 +19,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.res.painterResource
+import com.imanhaikal.memo.R
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -204,12 +207,33 @@ fun TransactionItem(
                             ).joinToString(" · ")
                         }
 
-                        if (detailStr.isNotEmpty()) {
-                            Text(
-                                text = detailStr,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = AppColors.TextTertiary
-                            )
+                        val hasReceipt = transaction.receiptFileName != null
+                        if (detailStr.isNotEmpty() || hasReceipt) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (detailStr.isNotEmpty()) {
+                                    Text(
+                                        text = detailStr,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = AppColors.TextTertiary
+                                    )
+                                }
+                                // A glyph rather than a thumbnail: a column of photos would
+                                // dominate a list that is meant to read as numbers. And it
+                                // is deliberately not tappable — the row already owns both
+                                // a click (edit) and a swipe (delete), and a nested target
+                                // would fight them. The image is one tap further in.
+                                if (hasReceipt) {
+                                    if (detailStr.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                    }
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_receipt),
+                                        contentDescription = "Has receipt",
+                                        tint = AppColors.TextTertiary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
                         }
                     }
 

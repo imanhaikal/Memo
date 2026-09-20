@@ -5,6 +5,14 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!--
+        Only for copying camera-captured receipts into the gallery on Android 8-9. From 10 on
+        MediaStore writes to our own album need no permission, so it is capped there and
+        never shown to anyone on a current phone.
+    -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <application
         android:name=".MemoApplication"

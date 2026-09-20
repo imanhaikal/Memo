@@ -101,6 +101,13 @@ class FakeTransactionDao(initial: List<Transaction> = emptyList()) : Transaction
     ): Int = rows.value.count {
         it.recurringRuleId == ruleId && it.date >= dayStart && it.date < dayEndExclusive
     }
+
+    override suspend fun referencedReceiptFiles(): List<String> =
+        rows.value.mapNotNull { it.receiptFileName }
+
+    override suspend fun clearAllReceiptFiles() {
+        rows.value = rows.value.map { it.copy(receiptFileName = null) }
+    }
 }
 
 class FakeBudgetDao(initial: List<Budget> = emptyList()) : BudgetDao {

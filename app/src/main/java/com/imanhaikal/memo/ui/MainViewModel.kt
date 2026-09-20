@@ -29,6 +29,8 @@ import com.imanhaikal.memo.data.backup.ImportMode
 import com.imanhaikal.memo.data.backup.ImportResult
 import com.imanhaikal.memo.data.backup.MemoBackup
 import com.imanhaikal.memo.data.receipt.ReceiptScanner
+import com.imanhaikal.memo.data.receipt.ReceiptStorageStats
+import com.imanhaikal.memo.data.receipt.ReceiptStore
 import com.imanhaikal.memo.data.receipt.ScanFailureReason
 import com.imanhaikal.memo.data.receipt.ScanOutcome
 import com.imanhaikal.memo.domain.BudgetCalculatorUseCase
@@ -55,6 +57,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.File
 import java.time.Clock
 import java.time.LocalDate
 
@@ -128,10 +131,13 @@ class MainViewModel(
     private val appearancePreferences: AppearancePreferences,
     private val clock: Clock,
     private val receiptScanner: ReceiptScanner,
+    private val receiptStore: ReceiptStore,
     private val dayTicker: DayTicker,
     private val startupMigration: Deferred<Unit>,
     /** Lets the app re-schedule background work when the toggles change. */
     private val onNotificationSettingsChanged: (NotificationSettings) -> Unit = {},
+    /** Copies an in-app camera capture into the phone's gallery; false if it didn't land. */
+    private val publishToGallery: suspend (Uri) -> Boolean = { false },
     private val budgetCalculator: BudgetCalculatorUseCase = BudgetCalculatorUseCase(clock.zone),
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) : ViewModel() {
@@ -317,7 +323,8 @@ class MainViewModel(
         category: Category? = null,
         description: String = "",
         hasTime: Boolean = true,
-        type: TransactionType = TransactionType.EXPENSE
+        type: TransactionType = TransactionType.EXPENSE,
+        receiptFileName: String? = null
     ) {
         viewModelScope.launch {
             val active = budgetRepository.resolveActiveBudget() ?: return@launch
@@ -330,7 +337,8 @@ class MainViewModel(
                     description = description,
                     hasTime = hasTime,
                     budgetId = active.id,
-                    type = type
+                    type = type,
+                    receiptFileName = receiptFileName
                 )
             )
         }
@@ -365,6 +373,7 @@ class MainViewModel(
         viewModelScope.launch {
             val active = budgetRepository.resolveActiveBudget() ?: return@launch
             budgetRepository.clearBudgetData(active)
+            sweepReceipts(graceMillis = 0)
         }
     }
 
@@ -373,6 +382,25 @@ class MainViewModel(
         viewModelScope.launch {
             val active = budgetRepository.resolveActiveBudget() ?: return@launch
             budgetRepository.deleteBudget(active)
+            sweepReceipts(graceMillis = 0)
+        }
+    }
+
+    /**
+     * Collects receipt images nothing points at any more.
+     *
+     * [graceMillis] is 0 at every call site here, unlike the 24h the startup sweep uses:
+     * these all follow a confirmed destructive action taken on the Settings screen, so no
+     * attach flow can be in flight, and the user expects the storage figure to drop now
+     * rather than tomorrow.
+     */
+    private suspend fun sweepReceipts(graceMillis: Long) {
+        runCatching {
+            receiptStore.sweepOrphans(
+                referenced = transactionDao.referencedReceiptFiles().toSet(),
+                graceMillis = graceMillis
+            )
+            _receiptStorage.value = receiptStore.stats()
         }
     }
 
@@ -477,6 +505,11 @@ class MainViewModel(
     fun importBackup(contents: String, mode: ImportMode, onFinished: (String) -> Unit) {
         viewModelScope.launch {
             val result = backupRepository.import(contents, mode)
+            // A REPLACE wiped every row, so whatever those rows referenced is now an orphan.
+            // A failed one changed nothing, and gets no side effects either.
+            if (mode == ImportMode.REPLACE && result is ImportResult.Success) {
+                sweepReceipts(graceMillis = 0)
+            }
             onFinished(
                 when (result) {
                     is ImportResult.Success -> buildString {
@@ -525,6 +558,52 @@ class MainViewModel(
         _scanState.value = ScanState.Idle
     }
 
+    // ---- Receipt images --------------------------------------------------------------
+
+    /**
+     * Copies the picked image into internal storage and hands back its stored file name.
+     *
+     * Called as soon as a picker returns, not when the dialog is confirmed: a PhotoPicker
+     * grant dies with the process, and being killed while the camera app is foregrounded is
+     * routine. A callback rather than a suspend function, matching [importBackup] — the
+     * caller is a composable and the coroutine belongs in viewModelScope.
+     */
+    fun saveReceiptImage(uri: Uri, onSaved: (String?) -> Unit) {
+        viewModelScope.launch { onSaved(receiptStore.save(uri)) }
+    }
+
+    /**
+     * Puts a copy of a camera capture in the phone's gallery. Separate from
+     * [saveReceiptImage] and never gating it: the in-app copy is the one the entry depends
+     * on, and a gallery failure must not cost the user their attachment.
+     */
+    fun copyCaptureToGallery(uri: Uri, onFinished: (Boolean) -> Unit) {
+        viewModelScope.launch { onFinished(runCatching { publishToGallery(uri) }.getOrDefault(false)) }
+    }
+
+    /** The file backing [fileName], or null when it isn't on this device. */
+    fun receiptFile(fileName: String): File? =
+        receiptStore.fileFor(fileName)?.takeIf { it.exists() }
+
+    private val _receiptStorage = MutableStateFlow(ReceiptStorageStats.EMPTY)
+    val receiptStorage: StateFlow<ReceiptStorageStats> = _receiptStorage.asStateFlow()
+
+    fun refreshReceiptStorage() {
+        viewModelScope.launch {
+            runCatching { _receiptStorage.value = receiptStore.stats() }
+        }
+    }
+
+    fun deleteAllReceipts() {
+        viewModelScope.launch {
+            // Detach first: a crash between the two leaves harmless orphans for the sweep,
+            // whereas deleting the files first would strand rows pointing at nothing.
+            transactionDao.clearAllReceiptFiles()
+            receiptStore.deleteAll()
+            runCatching { _receiptStorage.value = receiptStore.stats() }
+        }
+    }
+
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
@@ -541,11 +620,13 @@ class MainViewModel(
                     appearancePreferences = container.budgetPreferences,
                     clock = container.clock,
                     receiptScanner = container.receiptScanner,
+                    receiptStore = container.receiptStore,
                     dayTicker = container.dayTicker,
                     startupMigration = container.startupMigration,
                     onNotificationSettingsChanged = { settings ->
                         MemoWorkScheduler.sync(application, settings, container.clock)
-                    }
+                    },
+                    publishToGallery = { uri -> container.galleryPublisher.publish(uri) }
                 )
             }
         }
